@@ -1,0 +1,107 @@
+import { Type, FunctionDeclaration } from "@google/genai";
+
+export const createMandateTool: FunctionDeclaration = {
+  name: "create_mandate",
+  description:
+    "Registers a new autonomous recurring financial mandate with a hard budget ceiling in the persistent database.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      service: {
+        type: Type.STRING,
+        description: "The name of the subscription, merchant, or service (e.g. 'Netflix Standard HD', 'Spotify Premium').",
+      },
+      max_amount: {
+        type: Type.NUMBER,
+        description: "Maximum allowable budget ceiling in USD (e.g. 20.00). Payments above this will be blocked.",
+      },
+      schedule: {
+        type: Type.STRING,
+        description: "Recurrence schedule rule (e.g. 'Monthly on 5th', 'Weekly on Monday', 'Annual').",
+      },
+      currency: {
+        type: Type.STRING,
+        description: "Three-letter ISO currency code (default: 'USD').",
+      },
+      category: {
+        type: Type.STRING,
+        description: "Category of the expense (e.g. 'Entertainment', 'Cloud', 'Productivity', 'Music').",
+      },
+      strict_mode: {
+        type: Type.BOOLEAN,
+        description: "Whether this mandate requires human approval before payment execution.",
+      },
+    },
+    required: ["service", "max_amount", "schedule"],
+  },
+};
+
+export const verifyWebPriceTool: FunctionDeclaration = {
+  name: "verify_web_price",
+  description:
+    "Launches the Playwright headless web automation engine to inspect the merchant's live pricing page and verify current subscription rates.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      service_name: {
+        type: Type.STRING,
+        description: "The name of the service to verify (e.g. 'Netflix', 'Spotify', 'GitHub Copilot').",
+      },
+      service_url: {
+        type: Type.STRING,
+        description: "Optional URL of the merchant pricing page. If omitted, the browser agent navigates automatically.",
+      },
+      expected_price: {
+        type: Type.NUMBER,
+        description: "Expected or baseline price to check for price spike anomalies (>20% jump).",
+      },
+    },
+    required: ["service_name"],
+  },
+};
+
+export const executePayPalPaymentTool: FunctionDeclaration = {
+  name: "execute_paypal_payment",
+  description:
+    "Authorizes and captures a live payment transaction through the official PayPal Sandbox MCP Server / Orders API, returning a digital receipt.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      service_name: {
+        type: Type.STRING,
+        description: "Target merchant or subscription service receiving payment.",
+      },
+      verified_price: {
+        type: Type.NUMBER,
+        description: "The verified real-time price in USD to be charged.",
+      },
+      budget_ceiling: {
+        type: Type.NUMBER,
+        description: "The user-authorized budget ceiling. The payment engine enforces that verified_price <= budget_ceiling.",
+      },
+      mandate_id: {
+        type: Type.STRING,
+        description: "Optional ID of the registered mandate associated with this payment.",
+      },
+      recipient_email: {
+        type: Type.STRING,
+        description: "Optional recipient email address or merchant identifier.",
+      },
+      description: {
+        type: Type.STRING,
+        description: "Optional payment description (e.g. 'Automated subscription mandate execution').",
+      },
+    },
+    required: ["service_name", "verified_price", "budget_ceiling"],
+  },
+};
+
+export const payAgentTools = [
+  {
+    functionDeclarations: [
+      createMandateTool,
+      verifyWebPriceTool,
+      executePayPalPaymentTool,
+    ],
+  },
+];

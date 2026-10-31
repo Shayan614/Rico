@@ -27,6 +27,8 @@ dist/
 *.sqlite3
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 
 # Playwright
 test-results/

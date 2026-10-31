@@ -220,8 +220,8 @@ export default function Home() {
     },
   ]);
 
-  // Send message
-  const handleSendMessage = (text: string) => {
+  // Send message with streaming response from Gemini agent
+  const handleSendMessage = async (text: string) => {
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       sender: "user",
@@ -232,159 +232,201 @@ export default function Home() {
       }),
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const assistantMsgId = `msg-resp-${Date.now()}`;
+    const initialAssistantMsg: ChatMessage = {
+      id: assistantMsgId,
+      sender: "assistant",
+      text: "",
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      thoughtProcess: {
+        summary: "Analyzing mandate...",
+        steps: [],
+      },
+    };
 
-    setTimeout(() => {
-      const lower = text.toLowerCase();
-      const detectedService = lower.includes("netflix")
-        ? "Netflix"
-        : lower.includes("spotify")
-        ? "Spotify"
-        : lower.includes("aws")
-        ? "AWS Cloud"
-        : lower.includes("github")
-        ? "GitHub Copilot"
-        : "Merchant Service";
+    setMessages((prev) => [...prev, userMsg, initialAssistantMsg]);
 
-      if (strictMode) {
-        setApprovalRequest({
-          id: `req-${Date.now()}`,
-          service: detectedService,
-          detectedPrice: 15.99,
-          budgetCeiling: 20.0,
-          reason:
-            "Manual Approval Mode is active. Please confirm before completing execution.",
-          currency: "USD",
-        });
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          strictMode,
+          mandates,
+        }),
+      });
 
-        const holdMsg: ChatMessage = {
-          id: `msg-hold-${Date.now()}`,
-          sender: "assistant",
-          text: `Verified pricing for ${detectedService} at $15.99 (limit: $20.00). Manual approval is required.`,
-          timestamp: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          thoughtProcess: {
-            summary: "Manual Approval Required",
-            steps: [
-              {
-                step: `Verified ${detectedService} price: $15.99`,
-                status: "done",
-              },
-              {
-                step: "Verified $15.99 <= $20.00 cap",
-                status: "done",
-              },
-              {
-                step: "Awaiting confirmation",
-                status: "running",
-              },
-            ],
-          },
-        };
-        setMessages((prev) => [...prev, holdMsg]);
-        return;
+      if (!response.ok || !response.body) {
+        throw new Error("Chat request failed");
       }
 
-      const orderId = `ORD-${Math.floor(10000000 + Math.random() * 90000000)}`;
-      const price = lower.includes("spotify")
-        ? 11.99
-        : lower.includes("aws")
-        ? 45.0
-        : 15.99;
-      const ceiling = lower.includes("spotify") ? 15.0 : 20.0;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulatedText = "";
+      const currentSteps: { step: string; status: "done" | "running" | "waiting"; detail?: string }[] = [];
 
-      const newReceipt: ReceiptData = {
-        orderId,
-        service: detectedService,
-        planName: `${detectedService} Subscription`,
-        verifiedPrice: price,
-        budgetCeiling: ceiling,
-        currency: "USD",
-        paymentMethod: "Connected Account",
-        status: "COMPLETED",
-        timestamp: new Date().toLocaleString(),
-        payerEmail: "user@example.com",
-        sandboxAuthCode: `AUTH-${Math.floor(1000 + Math.random() * 9000)}`,
-      };
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
 
-      const newTx: Transaction = {
-        id: `tx-${Date.now()}`,
-        orderId,
-        service: detectedService,
-        amount: price,
-        currency: "USD",
-        status: "COMPLETED",
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        receiptData: newReceipt,
-      };
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
 
-      const newLog: AuditLog = {
-        id: `log-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        eventType: "PAYMENT_CAPTURED",
-        service: detectedService,
-        details: `Autonomous execution: Scraped ${detectedService} ($${price.toFixed(
-          2
-        )}) verified <= $${ceiling.toFixed(2)}. Captured ${orderId}.`,
-        severity: "success",
-      };
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
 
-      setTransactions((prev) => [newTx, ...prev]);
-      setAuditLogs((prev) => [newLog, ...prev]);
+            if (event.type === "token" && event.text) {
+              accumulatedText += event.text;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? { ...m, text: accumulatedText }
+                    : m
+                )
+              );
+            } else if (event.type === "step" && event.step) {
+              const existingIdx = currentSteps.findIndex(
+                (s) => s.step === event.step.step
+              );
+              if (existingIdx >= 0) {
+                currentSteps[existingIdx] = event.step;
+              } else {
+                currentSteps.push(event.step);
+              }
 
-      // Persist transaction and audit log to SQLite
-      fetch("/api/transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newTx),
-      }).catch((err) => console.error("Failed to persist transaction:", err));
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? {
+                        ...m,
+                        thoughtProcess: {
+                          summary: `Autonomous Reasoning (${currentSteps.length} steps)`,
+                          steps: [...currentSteps],
+                        },
+                      }
+                    : m
+                )
+              );
+            } else if (event.type === "thought" && event.thought) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? {
+                        ...m,
+                        thoughtProcess: event.thought,
+                      }
+                    : m
+                )
+              );
+            } else if (event.type === "receipt" && event.receipt) {
+              const receiptData = event.receipt as ReceiptData;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? {
+                        ...m,
+                        receipt: receiptData,
+                      }
+                    : m
+                )
+              );
 
-      fetch("/api/audit-logs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newLog),
-      }).catch((err) => console.error("Failed to persist audit log:", err));
+              const newTx: Transaction = {
+                id: `tx-${Date.now()}`,
+                orderId: receiptData.orderId,
+                service: receiptData.service,
+                amount: receiptData.verifiedPrice,
+                currency: receiptData.currency || "USD",
+                status: "COMPLETED",
+                timestamp: new Date().toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+                receiptData: receiptData,
+              };
 
-      const botMsg: ChatMessage = {
-        id: `msg-resp-${Date.now()}`,
-        sender: "assistant",
-        text: `Mandate executed for ${detectedService}. Verified price is $${price.toFixed(
-          2
-        )} USD, within your $${ceiling.toFixed(2)} limit.`,
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        thoughtProcess: {
-          summary: `Verified $${price.toFixed(2)} & Captured Order`,
-          steps: [
-            {
-              step: `Checked ${detectedService} pricing`,
-              status: "done",
-            },
-            {
-              step: `Verified price $${price.toFixed(2)} <= limit $${ceiling.toFixed(2)}`,
-              status: "done",
-            },
-            {
-              step: `Captured order ${orderId}`,
-              status: "done",
-            },
-          ],
-        },
-        receipt: newReceipt,
-      };
+              const newLog: AuditLog = {
+                id: `log-${Date.now()}`,
+                timestamp: new Date().toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+                eventType: "PAYMENT_CAPTURED",
+                service: receiptData.service,
+                details: `Autonomous execution: Scraped ${receiptData.service} ($${receiptData.verifiedPrice.toFixed(
+                  2
+                )}) verified <= $${receiptData.budgetCeiling.toFixed(
+                  2
+                )}. Captured ${receiptData.orderId}.`,
+                severity: "success",
+              };
 
-      setMessages((prev) => [...prev, botMsg]);
-    }, 500);
+              setTransactions((prev) => [newTx, ...prev]);
+              setAuditLogs((prev) => [newLog, ...prev]);
+
+              fetch("/api/transactions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(newTx),
+              }).catch((e) => console.error(e));
+
+              fetch("/api/audit-logs", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(newLog),
+              }).catch((e) => console.error(e));
+            } else if (event.type === "done" && event.text && !accumulatedText) {
+              accumulatedText = event.text;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? { ...m, text: accumulatedText }
+                    : m
+                )
+              );
+            }
+          } catch (parseErr) {
+            console.warn("SSE parse error:", parseErr);
+          }
+        }
+      }
+
+      // Check if strict mode approval is required
+      if (strictMode && accumulatedText.includes("Strict Approval Mode is ENABLED")) {
+        setApprovalRequest({
+          id: `req-${Date.now()}`,
+          service: text.toLowerCase().includes("netflix")
+            ? "Netflix Standard HD"
+            : text.toLowerCase().includes("spotify")
+            ? "Spotify Premium"
+            : "Merchant Service",
+          detectedPrice: 15.49,
+          budgetCeiling: 20.0,
+          reason: "Strict Approval Mode is active. Please confirm before completing PayPal charge.",
+          currency: "USD",
+        });
+      }
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Error streaming response";
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? {
+                ...m,
+                text: `Agent Error: ${errorMsg}`,
+              }
+            : m
+        )
+      );
+    }
   };
 
   const handleTriggerMandate = (id: string) => {
