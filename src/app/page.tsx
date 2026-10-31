@@ -436,29 +436,149 @@ export default function Home() {
   };
 
   const handleApprove = () => {
+    if (!approvalRequest) return;
+    const req = approvalRequest;
     setApprovalRequest(null);
-    const approvedMsg: ChatMessage = {
-      id: `msg-app-${Date.now()}`,
-      sender: "assistant",
-      text: "Payment approved. Order captured successfully.",
+
+    const orderId = `ORD-APP-${Math.floor(10000000 + Math.random() * 90000000)}`;
+    const authCode = `AUTH-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const newReceipt: ReceiptData = {
+      orderId,
+      service: req.service,
+      planName: `${req.service} Approved Plan`,
+      verifiedPrice: req.detectedPrice,
+      budgetCeiling: req.budgetCeiling,
+      currency: req.currency || "USD",
+      paymentMethod: "PayPal Sandbox Wallet (Approved)",
+      status: "COMPLETED",
+      timestamp: new Date().toLocaleString(),
+      payerEmail: "sb-buyer2026@personal.example.com",
+      sandboxAuthCode: authCode,
+    };
+
+    const newTx: Transaction = {
+      id: `tx-app-${Date.now()}`,
+      orderId,
+      service: req.service,
+      amount: req.detectedPrice,
+      currency: req.currency || "USD",
+      status: "COMPLETED",
       timestamp: new Date().toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
       }),
+      receiptData: newReceipt,
+    };
+
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      eventType: "PAYMENT_CAPTURED",
+      service: req.service,
+      details: `User manual approval granted for ${req.service} ($${req.detectedPrice.toFixed(
+        2
+      )}). Order ${orderId} captured via PayPal.`,
+      severity: "success",
+    };
+
+    setTransactions((prev) => [newTx, ...prev]);
+    setAuditLogs((prev) => [newLog, ...prev]);
+
+    fetch("/api/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newTx),
+    }).catch((e) => console.error(e));
+
+    fetch("/api/audit-logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newLog),
+    }).catch((e) => console.error(e));
+
+    const approvedMsg: ChatMessage = {
+      id: `msg-app-${Date.now()}`,
+      sender: "assistant",
+      text: `Manual approval confirmed for ${req.service}. Payment of $${req.detectedPrice.toFixed(
+        2
+      )} ${req.currency} successfully executed via PayPal.`,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      thoughtProcess: {
+        summary: "Manual Review Approved",
+        steps: [
+          {
+            step: "Human approval confirmed",
+            status: "done",
+            detail: `Authorized $${req.detectedPrice.toFixed(2)}`,
+          },
+          {
+            step: "Executed payment via PayPal",
+            status: "done",
+            detail: `Order: ${orderId}`,
+          },
+        ],
+      },
+      receipt: newReceipt,
     };
     setMessages((prev) => [...prev, approvedMsg]);
   };
 
   const handleReject = () => {
+    if (!approvalRequest) return;
+    const req = approvalRequest;
     setApprovalRequest(null);
-    const rejectedMsg: ChatMessage = {
-      id: `msg-rej-${Date.now()}`,
-      sender: "assistant",
-      text: "Payment was rejected. Funds withheld.",
+
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
       timestamp: new Date().toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
       }),
+      eventType: "GUARDRAIL_BLOCKED",
+      service: req.service,
+      details: `User rejected payment authorization for ${req.service} ($${req.detectedPrice.toFixed(
+        2
+      )}).`,
+      severity: "danger",
+    };
+
+    setAuditLogs((prev) => [newLog, ...prev]);
+    fetch("/api/audit-logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newLog),
+    }).catch((e) => console.error(e));
+
+    const rejectedMsg: ChatMessage = {
+      id: `msg-rej-${Date.now()}`,
+      sender: "assistant",
+      text: `Execution cancelled by user for ${req.service}. Funds withheld and mandate kept in pause state.`,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      thoughtProcess: {
+        summary: "Manual Review Rejected",
+        steps: [
+          {
+            step: "Human review rejected",
+            status: "done",
+            detail: "Transaction cancelled by user",
+          },
+          {
+            step: "Enforced balance protection",
+            status: "done",
+            detail: "No PayPal funds transferred",
+          },
+        ],
+      },
     };
     setMessages((prev) => [...prev, rejectedMsg]);
   };

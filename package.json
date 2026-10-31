@@ -12,7 +12,8 @@
     "db:seed": "tsx src/db/seed.ts",
     "test:paypal": "tsx src/lib/paypal/test.ts",
     "test:gemini": "tsx src/lib/gemini/test.ts",
-    "test:browser": "tsx src/lib/browser/test.ts"
+    "test:browser": "tsx src/lib/browser/test.ts",
+    "test:safety": "tsx src/lib/safety/test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.32.0",
