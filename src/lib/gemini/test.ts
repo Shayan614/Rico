@@ -8,6 +8,7 @@ import {
   executePayPalPayment,
   dispatchAgentTool,
 } from "./index";
+import { priceWorker } from "@/lib/browser";
 
 async function runGeminiIntegrationTest() {
   console.log("==================================================");
@@ -200,6 +201,8 @@ async function runGeminiIntegrationTest() {
   console.log("\n==================================================");
   console.log("🎉 All 9 Gemini Agent & Function Calling Tests PASSED!");
   console.log("==================================================");
+  await priceWorker.close();
+  process.exit(0);
 }
 
 runGeminiIntegrationTest().catch((err) => {

@@ -1,5 +1,6 @@
 import { db, mandates, transactions, auditLogs, type MandateRecord } from "@/db";
 import { executeMandatePayment, type PayPalReceipt } from "@/lib/paypal";
+import { priceWorker } from "@/lib/browser";
 import { eq } from "drizzle-orm";
 import {
   MandateToolParams,
@@ -10,63 +11,6 @@ import {
 function generateId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 }
-
-/**
- * Standard live plan pricing dictionary for recognized merchant services
- */
-const KNOWN_SERVICES: Record<
-  string,
-  { name: string; price: number; plan: string; category: string }
-> = {
-  netflix: {
-    name: "Netflix Standard HD",
-    price: 15.49,
-    plan: "Standard HD (2 Screens)",
-    category: "Media",
-  },
-  spotify: {
-    name: "Spotify Premium",
-    price: 11.99,
-    plan: "Individual Ad-Free Music",
-    category: "Music",
-  },
-  aws: {
-    name: "AWS Cloud Services",
-    price: 84.5,
-    plan: "Usage-Based Compute & Storage",
-    category: "Cloud",
-  },
-  github: {
-    name: "GitHub Copilot",
-    price: 19.0,
-    plan: "Copilot Business License",
-    category: "Developer Tools",
-  },
-  copilot: {
-    name: "GitHub Copilot",
-    price: 19.0,
-    plan: "Copilot Business License",
-    category: "Developer Tools",
-  },
-  adobe: {
-    name: "Adobe Creative Cloud",
-    price: 59.99,
-    plan: "All Apps Creative Suite",
-    category: "Creative",
-  },
-  chatgpt: {
-    name: "ChatGPT Plus",
-    price: 20.0,
-    plan: "Plus Individual Subscription",
-    category: "AI",
-  },
-  youtube: {
-    name: "YouTube Premium",
-    price: 13.99,
-    plan: "Ad-Free Video & Music",
-    category: "Media",
-  },
-};
 
 /**
  * Tool 1: create_mandate
@@ -149,21 +93,17 @@ export async function executeVerifyWebPrice(params: VerifyPriceToolParams): Prom
   anomalyWarning?: string;
   percentageDifference?: number;
 }> {
-  const key = Object.keys(KNOWN_SERVICES).find((k) =>
-    params.service_name.toLowerCase().includes(k)
+  // Execute real Playwright browser scraping worker
+  const scrapeResult = await priceWorker.scrapeMerchantPrice(
+    params.service_name,
+    params.service_url
   );
 
-  const matched = key
-    ? KNOWN_SERVICES[key]
-    : {
-        name: params.service_name,
-        price: 19.99,
-        plan: `${params.service_name} Plan`,
-        category: "General",
-      };
+  const verifiedPrice = scrapeResult.price;
+  const currency = scrapeResult.currency || "USD";
+  const planName = scrapeResult.planName;
+  const service = scrapeResult.service;
 
-  const verifiedPrice = matched.price;
-  const currency = "USD";
   let anomalyDetected = false;
   let anomalyWarning: string | undefined;
   let percentageDifference: number | undefined;
@@ -188,25 +128,27 @@ export async function executeVerifyWebPrice(params: VerifyPriceToolParams): Prom
   await db.insert(auditLogs).values({
     id: generateId("log"),
     eventType: anomalyDetected ? "ANOMALY_DETECTED" : "PRICE_VERIFIED",
-    service: matched.name,
+    service: service,
     details: anomalyDetected
       ? anomalyWarning!
-      : `Verified ${matched.name} price: $${verifiedPrice.toFixed(2)}/mo.`,
+      : `Verified ${service} price: $${verifiedPrice.toFixed(2)}/mo (${scrapeResult.source}).`,
     severity: anomalyDetected ? "warning" : "info",
     metadata: {
       verifiedPrice,
       expectedPrice: params.expected_price,
       percentageDifference,
-      serviceUrl: params.service_url,
+      serviceUrl: params.service_url || scrapeResult.url,
+      source: scrapeResult.source,
+      confidence: scrapeResult.confidence,
     },
   });
 
   return {
     success: true,
-    service: matched.name,
+    service: service,
     verifiedPrice,
     currency,
-    planName: matched.plan,
+    planName: planName,
     anomalyDetected,
     anomalyWarning,
     percentageDifference,

@@ -11,7 +11,8 @@
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/db/seed.ts",
     "test:paypal": "tsx src/lib/paypal/test.ts",
-    "test:gemini": "tsx src/lib/gemini/test.ts"
+    "test:gemini": "tsx src/lib/gemini/test.ts",
+    "test:browser": "tsx src/lib/browser/test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.32.0",
@@ -22,6 +23,7 @@
     "drizzle-orm": "^0.45.4",
     "lucide-react": "^1.66.0",
     "next": "14.2.33",
+    "playwright": "^1.64.1",
     "radix-ui": "^1.8.1",
     "react": "^18",
     "react-dom": "^18",
