@@ -11,6 +11,13 @@ import { ReceiptDialog, ReceiptData } from "@/components/dashboard/ReceiptDialog
 import { ApprovalDialog, ApprovalRequest } from "@/components/dashboard/ApprovalDialog";
 import { CreateMandateDialog } from "@/components/dashboard/CreateMandateDialog";
 import { usePayAgentChat, ChatMessage } from "@/lib/chat/use-payagent-chat";
+import {
+  trackMandateTriggered,
+  trackReceiptViewed,
+  trackApprovalDecision,
+  captureClientEvent,
+  posthog,
+} from "@/lib/telemetry/posthog-client";
 
 const INITIAL_MESSAGES: ChatMessage[] = [
   {
@@ -211,6 +218,22 @@ export default function Home() {
       });
   }, []);
 
+  // PostHog Feature Flag for Strict Approval Mode vs Autonomous Mode
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        posthog.onFeatureFlags(() => {
+          const isStrict = posthog.isFeatureEnabled("strict-approval-mode");
+          if (typeof isStrict === "boolean") {
+            setStrictMode(isStrict);
+          }
+        });
+      } catch {
+        // Fallback for offline/unconfigured key
+      }
+    }
+  }, []);
+
   const handleReceiptCaptured = (receiptData: ReceiptData) => {
     const newTx: Transaction = {
       id: `tx-${Date.now()}`,
@@ -279,6 +302,7 @@ export default function Home() {
   const handleTriggerMandate = (id: string) => {
     const target = mandates.find((m) => m.id === id);
     if (!target) return;
+    trackMandateTriggered(target.id, target.service);
     sendMessage(`Execute mandate now for ${target.service}`);
   };
 
@@ -286,6 +310,7 @@ export default function Home() {
     if (!approvalRequest) return;
     const req = approvalRequest;
     setApprovalRequest(null);
+    trackApprovalDecision(req.service, true, req.detectedPrice);
 
     const orderId = `ORD-APP-${Math.floor(10000000 + Math.random() * 90000000)}`;
     const authCode = `AUTH-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -381,6 +406,7 @@ export default function Home() {
     if (!approvalRequest) return;
     const req = approvalRequest;
     setApprovalRequest(null);
+    trackApprovalDecision(req.service, false, req.detectedPrice);
 
     const newLog: AuditLog = {
       id: `log-${Date.now()}`,
@@ -468,6 +494,21 @@ export default function Home() {
     }).catch((err) => console.error("Failed to persist audit log:", err));
   };
 
+  const handleToggleStrictMode = () => {
+    setStrictMode((prev) => {
+      const next = !prev;
+      captureClientEvent("strict_mode_toggled", {
+        new_mode: next ? "MANUAL_APPROVAL" : "AUTONOMOUS",
+      });
+      return next;
+    });
+  };
+
+  const handleOpenReceipt = (receipt: ReceiptData) => {
+    trackReceiptViewed(receipt.orderId, receipt.service);
+    setSelectedReceipt(receipt);
+  };
+
   return (
     <div className="h-screen w-screen flex flex-col bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 overflow-hidden font-sans transition-colors">
       {/* Top Header */}
@@ -475,7 +516,7 @@ export default function Home() {
         splitMode={splitMode}
         onSplitModeChange={setSplitMode}
         strictMode={strictMode}
-        onToggleStrictMode={() => setStrictMode((prev) => !prev)}
+        onToggleStrictMode={handleToggleStrictMode}
         mandatesCount={mandates.length}
         onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
       />
@@ -492,9 +533,9 @@ export default function Home() {
               onInputChange={(val) => setInput(val)}
               onSendMessage={sendMessage}
               onClearChat={clearChat}
-              onViewReceipt={(receipt) => setSelectedReceipt(receipt)}
+              onViewReceipt={handleOpenReceipt}
               strictMode={strictMode}
-              onToggleStrictMode={() => setStrictMode((prev) => !prev)}
+              onToggleStrictMode={handleToggleStrictMode}
               isLoading={isLoading}
               onStop={stop}
             />
@@ -505,7 +546,7 @@ export default function Home() {
               transactions={transactions}
               auditLogs={auditLogs}
               onTriggerMandate={handleTriggerMandate}
-              onViewReceipt={(receipt) => setSelectedReceipt(receipt)}
+              onViewReceipt={handleOpenReceipt}
               onCreateMandateClick={() => setIsCreateOpen(true)}
             />
           }
@@ -520,7 +561,7 @@ export default function Home() {
         transactions={transactions}
         auditLogs={auditLogs}
         onTriggerMandate={handleTriggerMandate}
-        onViewReceipt={(receipt) => setSelectedReceipt(receipt)}
+        onViewReceipt={handleOpenReceipt}
         onCreateMandateClick={() => setIsCreateOpen(true)}
       />
 

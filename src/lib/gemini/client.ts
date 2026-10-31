@@ -8,6 +8,7 @@ import {
   executePayPalPayment,
 } from "./tool-executors";
 import { StreamEvent, ChatContext, ThoughtStep } from "./types";
+import { posthogServer } from "@/lib/telemetry/posthog-server";
 
 export class GeminiAgentClient {
   private client: GoogleGenAI | null = null;
@@ -48,21 +49,34 @@ export class GeminiAgentClient {
     context?: ChatContext
   ): AsyncGenerator<StreamEvent> {
     const isLive = this.isLiveKeyConfigured();
+    const startTime = Date.now();
+    let totalOutputTokens = 0;
 
-    if (isLive && this.client) {
-      try {
-        yield* this.streamLiveGemini(userMessage, context);
-        return;
-      } catch (err) {
-        console.warn(
-          "Gemini live stream encountered an error, falling back to simulated reasoning:",
-          err
-        );
-        // Fall through to simulation
+    const stream = isLive && this.client
+      ? this.streamLiveGemini(userMessage, context)
+      : this.streamSimulatedReasoning(userMessage, context);
+
+    try {
+      for await (const event of stream) {
+        if (event.type === "token" && event.text) {
+          totalOutputTokens += Math.max(1, Math.round(event.text.length / 4));
+        }
+        yield event;
       }
-    }
+    } finally {
+      const latencyMs = Date.now() - startTime;
+      const inputTokens = Math.max(80, Math.round((userMessage.length + 800) / 4));
+      const outputTokens = Math.max(25, totalOutputTokens);
 
-    yield* this.streamSimulatedReasoning(userMessage, context);
+      await posthogServer.trackLLMGeneration({
+        model: isLive ? this.modelName : "gemini-3.8-flash",
+        inputTokens,
+        outputTokens,
+        latencyMs,
+        status: "success",
+        promptSnippet: userMessage.slice(0, 80),
+      });
+    }
   }
 
   /**
@@ -266,6 +280,14 @@ export class GeminiAgentClient {
         2
       )} USD (${schedule}). Persisted into database with status ACTIVE.`;
 
+      await posthogServer.trackMandateCreated({
+        mandateId: created.mandate.id,
+        service,
+        budgetCeiling: ceiling,
+        recurrence: schedule,
+        strictMode: isStrictMode,
+      });
+
       for (const word of mandateMsg.split(" ")) {
         yield { type: "token", text: word + " " };
         await delay(20);
@@ -400,6 +422,15 @@ export class GeminiAgentClient {
     });
 
     const { orderId, receipt } = paymentResult;
+
+    await posthogServer.trackPaymentCompleted({
+      orderId,
+      service,
+      amount: defaultPrice,
+      budgetCeiling: ceiling,
+      savingsEnforced: ceiling - defaultPrice,
+      payerEmail: "sb-buyer2026@personal.example.com",
+    });
 
     step4.status = "done";
     step4.detail = `Payment captured! Order ID: ${orderId}`;

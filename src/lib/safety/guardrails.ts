@@ -1,4 +1,5 @@
 import { db, auditLogs } from "@/db";
+import { posthogServer } from "@/lib/telemetry/posthog-server";
 import {
   GuardrailEvaluationParams,
   GuardrailEvaluationResult,
@@ -84,6 +85,15 @@ export async function evaluateFinancialGuardrails(
       },
     });
 
+    // Telemetry: Capture guardrail halt event in PostHog
+    await posthogServer.trackGuardrailBlocked({
+      service: serviceName,
+      attemptedPrice: scrapedPrice,
+      budgetCeiling,
+      exceededBy: ceilingCheck.diff,
+      reason,
+    });
+
     return {
       passed: false,
       status: "BLOCKED",
@@ -121,6 +131,15 @@ export async function evaluateFinancialGuardrails(
           baselinePrice: expectedPrice,
           percentageJump: anomalyCheck.percentageJump,
         },
+      });
+
+      // Telemetry: Capture price anomaly spike event in PostHog
+      await posthogServer.trackPriceAnomaly({
+        service: serviceName,
+        currentPrice: scrapedPrice,
+        baselinePrice: expectedPrice,
+        percentageJump: `+${anomalyCheck.percentageJump}%`,
+        holdTriggered: true,
       });
 
       return {
