@@ -1,6 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
 import { buildSystemPromptWithContext } from "./prompts";
 import { payAgentTools } from "./tools";
+import {
+  dispatchAgentTool,
+  executeCreateMandate,
+  executeVerifyWebPrice,
+  executePayPalPayment,
+} from "./tool-executors";
 import { StreamEvent, ChatContext, ThoughtStep } from "./types";
 
 export class GeminiAgentClient {
@@ -134,10 +140,41 @@ export class GeminiAgentClient {
               type: "step",
               step: {
                 step: `Executing Tool: ${toolCall.name}`,
-                status: "done",
+                status: "running",
                 detail: `Invoked with: ${JSON.stringify(toolCall.args)}`,
               },
             };
+
+            try {
+              const toolResult = await dispatchAgentTool(toolCall.name, toolCall.args);
+              if (toolResult.receipt) {
+                yield {
+                  type: "receipt",
+                  receipt: toolResult.receipt as Record<string, unknown>,
+                };
+              }
+              yield {
+                type: "step",
+                step: {
+                  step: `Executed Tool: ${toolCall.name}`,
+                  status: "done",
+                  detail: toolResult.message
+                    ? String(toolResult.message)
+                    : `Result: ${JSON.stringify(toolResult).slice(0, 80)}...`,
+                },
+              };
+            } catch (toolErr) {
+              const errMsg =
+                toolErr instanceof Error ? toolErr.message : String(toolErr);
+              yield {
+                type: "step",
+                step: {
+                  step: `Tool ${toolCall.name} Blocked`,
+                  status: "done",
+                  detail: errMsg,
+                },
+              };
+            }
           }
         }
       }
@@ -208,6 +245,55 @@ export class GeminiAgentClient {
 
     const isPriceExceeded = defaultPrice > ceiling;
 
+    // Check if this is a mandate creation request only
+    const isCreateMandateOnly =
+      (textLower.includes("create mandate") ||
+        textLower.includes("register mandate") ||
+        textLower.includes("add mandate") ||
+        textLower.includes("new mandate")) &&
+      !textLower.includes("pay now") &&
+      !textLower.includes("execute");
+
+    if (isCreateMandateOnly) {
+      const created = await executeCreateMandate({
+        service,
+        max_amount: ceiling,
+        schedule,
+        strict_mode: isStrictMode,
+      });
+
+      const mandateMsg = `Registered new recurring mandate for ${service}: Max ceiling $${ceiling.toFixed(
+        2
+      )} USD (${schedule}). Persisted into database with status ACTIVE.`;
+
+      for (const word of mandateMsg.split(" ")) {
+        yield { type: "token", text: word + " " };
+        await delay(20);
+      }
+
+      yield {
+        type: "thought",
+        thought: {
+          summary: "Mandate Registered",
+          steps: [
+            {
+              step: "Created mandate in persistent memory",
+              status: "done",
+              detail: `Mandate ID: ${created.mandate.id}`,
+            },
+            {
+              step: "Safety budget ceiling configured",
+              status: "done",
+              detail: `Max $${ceiling.toFixed(2)} USD`,
+            },
+          ],
+        },
+      };
+
+      yield { type: "done", text: mandateMsg };
+      return;
+    }
+
     // Step 1: Interpreting mandate
     const step1: ThoughtStep = {
       step: "Interpreted recurring mandate",
@@ -220,7 +306,7 @@ export class GeminiAgentClient {
     step1.status = "done";
     yield { type: "step", step: step1 };
 
-    // Step 2: Browser verification
+    // Step 2: Browser verification via executeVerifyWebPrice
     const step2: ThoughtStep = {
       step: "Verified merchant price via Playwright",
       status: "running",
@@ -229,8 +315,14 @@ export class GeminiAgentClient {
     yield { type: "step", step: step2 };
     await delay(150);
 
+    const priceVerification = await executeVerifyWebPrice({
+      service_name: service,
+      expected_price: ceiling,
+    });
+    defaultPrice = priceVerification.verifiedPrice;
+
     step2.status = "done";
-    step2.detail = `Scraped live pricing: $${defaultPrice.toFixed(2)}/mo`;
+    step2.detail = `Scraped live pricing: $${defaultPrice.toFixed(2)}/mo (${priceVerification.planName})`;
     yield { type: "step", step: step2 };
 
     // Step 3: Safety Guardrail check
@@ -291,7 +383,7 @@ export class GeminiAgentClient {
       return;
     }
 
-    // Step 4: PayPal MCP Payment Execution
+    // Step 4: PayPal MCP Payment Execution via executePayPalPayment
     const step4: ThoughtStep = {
       step: "Executing PayPal Sandbox payment",
       status: "running",
@@ -300,34 +392,18 @@ export class GeminiAgentClient {
     yield { type: "step", step: step4 };
     await delay(150);
 
-    const orderId = `ORD-${Math.floor(10000000 + Math.random() * 90000000)}`;
-    const captureId = `CAP-${Math.floor(10000000 + Math.random() * 90000000)}`;
-    const authCode = `AUTH-${Math.floor(1000 + Math.random() * 9000)}`;
+    const paymentResult = await executePayPalPayment({
+      service_name: service,
+      verified_price: defaultPrice,
+      budget_ceiling: ceiling,
+      recipient_email: "sb-buyer2026@personal.example.com",
+    });
+
+    const { orderId, receipt } = paymentResult;
 
     step4.status = "done";
     step4.detail = `Payment captured! Order ID: ${orderId}`;
     yield { type: "step", step: step4 };
-
-    const receipt = {
-      orderId,
-      captureId,
-      service,
-      planName: `${service} Subscription`,
-      verifiedPrice: defaultPrice,
-      budgetCeiling: ceiling,
-      currency: "USD",
-      paymentMethod: "PayPal Connected Account",
-      status: "COMPLETED",
-      timestamp: new Date().toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      payerEmail: "sb-buyer2026@personal.example.com",
-      sandboxAuthCode: authCode,
-    };
 
     yield {
       type: "receipt",

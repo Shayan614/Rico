@@ -1,3 +1,5 @@
+import type { PayPalReceipt } from "@/lib/paypal";
+
 export interface ThoughtStep {
   step: string;
   status: "done" | "running" | "waiting";
@@ -42,7 +44,7 @@ export interface StreamEvent {
     name: string;
     args: Record<string, unknown>;
   };
-  receipt?: Record<string, unknown>;
+  receipt?: PayPalReceipt | Record<string, unknown>;
   error?: string;
 }
 
