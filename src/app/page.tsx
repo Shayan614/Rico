@@ -32,6 +32,29 @@ export default function Home() {
     }
   }, [darkMode]);
 
+  // Load live data from SQLite persistent store
+  useEffect(() => {
+    fetch("/api/dashboard")
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load dashboard data");
+        return res.json();
+      })
+      .then((data) => {
+        if (data.mandates && data.mandates.length > 0) {
+          setMandates(data.mandates);
+        }
+        if (data.transactions && data.transactions.length > 0) {
+          setTransactions(data.transactions);
+        }
+        if (data.auditLogs && data.auditLogs.length > 0) {
+          setAuditLogs(data.auditLogs);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not fetch database records, using defaults:", err);
+      });
+  }, []);
+
   // Mandates
   const [mandates, setMandates] = useState<Mandate[]>([
     {
@@ -317,6 +340,19 @@ export default function Home() {
       setTransactions((prev) => [newTx, ...prev]);
       setAuditLogs((prev) => [newLog, ...prev]);
 
+      // Persist transaction and audit log to SQLite
+      fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newTx),
+      }).catch((err) => console.error("Failed to persist transaction:", err));
+
+      fetch("/api/audit-logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newLog),
+      }).catch((err) => console.error("Failed to persist audit log:", err));
+
       const botMsg: ChatMessage = {
         id: `msg-resp-${Date.now()}`,
         sender: "assistant",
@@ -409,6 +445,19 @@ export default function Home() {
       severity: "info",
     };
     setAuditLogs((prev) => [log, ...prev]);
+
+    // Persist new mandate & log to SQLite
+    fetch("/api/mandates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(created),
+    }).catch((err) => console.error("Failed to persist mandate:", err));
+
+    fetch("/api/audit-logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(log),
+    }).catch((err) => console.error("Failed to persist audit log:", err));
   };
 
   return (
