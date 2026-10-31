@@ -66,7 +66,7 @@ export function ResizableSplit({
       ref={containerRef}
       className="h-full w-full flex flex-col md:flex-row overflow-hidden relative bg-white dark:bg-neutral-950 transition-colors"
     >
-      {/* Left Pane (Chat) */}
+      {/* Desktop Left Pane (Chat) */}
       <div
         style={{ width: `${ratio}%` }}
         className="hidden md:block h-full shrink-0 border-r border-neutral-200 dark:border-neutral-800"
@@ -74,21 +74,16 @@ export function ResizableSplit({
         {left}
       </div>
 
-      {/* Mobile only stack */}
-      <div className="md:hidden flex-1 h-1/2 border-b border-neutral-200 dark:border-neutral-800">
-        {left}
-      </div>
-
-      {/* Draggable Divider */}
+      {/* Desktop Draggable Divider */}
       <div
         onMouseDown={startDragging}
         className="hidden md:flex w-2 -ml-1 cursor-col-resize items-center justify-center relative z-20 group hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors"
-        title="Drag to resize"
+        title="Drag to resize split view"
       >
         <div className="w-[1.5px] h-8 rounded-full bg-neutral-300 dark:bg-neutral-700 group-hover:bg-neutral-500 group-hover:h-12 transition-all" />
       </div>
 
-      {/* Right Pane (Work Surface) */}
+      {/* Desktop Right Pane (Work Surface) */}
       <div
         style={{ width: `${100 - ratio}%` }}
         className="hidden md:block h-full flex-1"
@@ -96,8 +91,9 @@ export function ResizableSplit({
         {right}
       </div>
 
-      <div className="md:hidden flex-1 h-1/2">
-        {right}
+      {/* Mobile view: full height chat with mobile drawer toggle in header */}
+      <div className="md:hidden flex-1 h-full w-full overflow-hidden">
+        {left}
       </div>
     </div>
   );

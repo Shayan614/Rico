@@ -1,74 +1,62 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useRef, useEffect } from "react";
 import {
   ArrowUp,
-  ChevronDown,
-  ChevronRight,
   RotateCcw,
-  SlidersHorizontal,
-  Copy,
-  Check,
-  CheckCircle2,
-  FileText,
+  Square,
+  Sparkles,
+  ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 import { ReceiptData } from "@/components/dashboard/ReceiptDialog";
+import { ChatMessage } from "@/lib/chat/use-payagent-chat";
+import { ChatMessageRenderer } from "./ChatMessageRenderer";
 
-export interface ExecutionStep {
-  step: string;
-  status: "done" | "running" | "waiting";
-  detail?: string;
-}
-
-export interface ChatMessage {
-  id: string;
-  sender: "user" | "assistant";
-  text: string;
-  timestamp: string;
-  thoughtProcess?: {
-    summary: string;
-    steps: ExecutionStep[];
-  };
-  receipt?: ReceiptData;
-}
+export type { ExecutionStep, ThoughtProcess, StatusPill, ChatMessage } from "@/lib/chat/use-payagent-chat";
 
 interface ClaudeChatProps {
   messages: ChatMessage[];
+  input?: string;
+  onInputChange?: (value: string) => void;
   onSendMessage: (text: string) => void;
   onClearChat: () => void;
   onViewReceipt: (receipt: ReceiptData) => void;
   strictMode: boolean;
   onToggleStrictMode: () => void;
+  isLoading?: boolean;
+  onStop?: () => void;
+  onReload?: () => void;
 }
 
 export function ClaudeChat({
   messages,
+  input = "",
+  onInputChange,
   onSendMessage,
   onClearChat,
   onViewReceipt,
   strictMode,
   onToggleStrictMode,
+  isLoading = false,
+  onStop,
 }: ClaudeChatProps) {
-  const [inputText, setInputText] = useState("");
-  const [expandedThoughts, setExpandedThoughts] = useState<Record<string, boolean>>({
-    "msg-demo-sample": true,
-  });
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [internalInput, setInternalInput] = React.useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Synchronize internal vs external input
+  const currentInput = onInputChange ? input : internalInput;
+  const setInput = (val: string) => {
+    if (onInputChange) {
+      onInputChange(val);
+    } else {
+      setInternalInput(val);
+    }
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const toggleThought = (id: string) => {
-    setExpandedThoughts((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard?.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
+  }, [messages, isLoading]);
 
   const sampleSuggestions = [
     "Pay Netflix $15.99 on 5th, max $20",
@@ -78,9 +66,9 @@ export function ClaudeChat({
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!inputText.trim()) return;
-    onSendMessage(inputText);
-    setInputText("");
+    if (!currentInput.trim() || isLoading) return;
+    onSendMessage(currentInput);
+    setInput("");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -93,175 +81,81 @@ export function ClaudeChat({
   return (
     <div className="h-full flex flex-col bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors">
       {/* Top Bar */}
-      <div className="h-10 px-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between text-xs select-none shrink-0">
-        <span className="font-medium text-neutral-500 dark:text-neutral-400">
-          Agent Conversation
-        </span>
+      <div className="h-11 px-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between text-xs select-none shrink-0 bg-neutral-50/50 dark:bg-neutral-900/40">
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
+            <Sparkles className="w-3 h-3" />
+          </div>
+          <span className="font-semibold text-neutral-800 dark:text-neutral-200">
+            Agentic Conversation
+          </span>
+          <span className="hidden sm:inline-block text-[11px] text-neutral-400 dark:text-neutral-500">
+            • Gemini 3.8 Flash + Playwright CDP
+          </span>
+        </div>
 
-        <button
-          onClick={onClearChat}
-          className="flex items-center gap-1 text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 px-2 py-1 rounded transition-colors"
-          title="Clear Conversation"
-        >
-          <RotateCcw className="w-3 h-3" />
-          <span>Clear</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onClearChat}
+            className="flex items-center gap-1 text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 px-2 py-1 rounded transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            title="Clear Conversation"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Reset</span>
+          </button>
+        </div>
       </div>
 
       {/* Message Stream */}
       <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
         <div className="max-w-2xl mx-auto space-y-6">
-          {messages.map((msg) => (
-            <div key={msg.id} className="space-y-3">
-              {msg.sender === "user" ? (
-                /* User Message (Right-aligned bubble) */
-                <div className="flex justify-end">
-                  <div className="max-w-[85%] rounded-2xl bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 px-4 py-2.5 text-xs sm:text-sm text-neutral-900 dark:text-neutral-100 shadow-xs leading-relaxed">
-                    {msg.text}
-                  </div>
-                </div>
-              ) : (
-                /* Assistant Message */
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5">
-                    A
-                  </div>
-
-                  <div className="flex-1 space-y-3 overflow-hidden text-xs sm:text-sm leading-relaxed">
-                    {/* Collapsible Execution / Thought Process */}
-                    {msg.thoughtProcess && (
-                      <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60 overflow-hidden text-xs">
-                        <button
-                          onClick={() => toggleThought(msg.id)}
-                          className="w-full px-3.5 py-2 flex items-center justify-between text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50 transition-colors"
-                        >
-                          <span className="font-medium">
-                            {msg.thoughtProcess.summary}
-                          </span>
-                          {expandedThoughts[msg.id] ? (
-                            <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
-                          ) : (
-                            <ChevronRight className="w-3.5 h-3.5 text-neutral-400" />
-                          )}
-                        </button>
-
-                        {expandedThoughts[msg.id] && (
-                          <div className="px-3.5 pb-3 pt-1 space-y-2 border-t border-neutral-200 dark:border-neutral-800 text-[11px] text-neutral-600 dark:text-neutral-400 bg-white dark:bg-neutral-900">
-                            {msg.thoughtProcess.steps.map((st, i) => (
-                              <div key={i} className="flex items-start gap-2">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-neutral-900 dark:text-neutral-100 mt-0.5 shrink-0" />
-                                <div className="flex-1">
-                                  <span className="text-neutral-900 dark:text-neutral-100 font-medium">
-                                    {st.step}
-                                  </span>
-                                  {st.detail && (
-                                    <span className="text-neutral-500 dark:text-neutral-400 block font-mono text-[10px]">
-                                      {st.detail}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Text Body */}
-                    <div className="text-neutral-800 dark:text-neutral-200 whitespace-pre-wrap leading-relaxed">
-                      {msg.text}
-                    </div>
-
-                    {/* Minimalist Digital Receipt */}
-                    {msg.receipt && (
-                      <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-4 text-xs space-y-3">
-                        <div className="flex items-center justify-between pb-2.5 border-b border-neutral-200 dark:border-neutral-800">
-                          <div>
-                            <span className="font-semibold text-neutral-900 dark:text-neutral-100 block">
-                              Digital Receipt
-                            </span>
-                            <span className="text-[10px] font-mono text-neutral-500">
-                              {msg.receipt.orderId}
-                            </span>
-                          </div>
-                          <span className="px-2 py-0.5 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800 text-[10px] font-medium text-neutral-800 dark:text-neutral-200">
-                            Captured
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-[11px]">
-                          <div>
-                            <span className="text-neutral-500 block">Service:</span>
-                            <span className="font-medium text-neutral-900 dark:text-neutral-100">
-                              {msg.receipt.service}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-neutral-500 block">Plan:</span>
-                            <span className="text-neutral-700 dark:text-neutral-300">
-                              {msg.receipt.planName}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-neutral-500 block">Verified Price:</span>
-                            <span className="font-bold text-neutral-900 dark:text-neutral-100 text-sm">
-                              ${msg.receipt.verifiedPrice.toFixed(2)}{" "}
-                              {msg.receipt.currency}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-neutral-500 block">Ceiling Limit:</span>
-                            <span className="text-neutral-700 dark:text-neutral-300">
-                              ${msg.receipt.budgetCeiling.toFixed(2)}{" "}
-                              {msg.receipt.currency}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-2 border-t border-neutral-200 dark:border-neutral-800 text-[11px]">
-                          <button
-                            onClick={() =>
-                              handleCopy(msg.receipt!.orderId, msg.id)
-                            }
-                            className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 flex items-center gap-1 transition-colors"
-                          >
-                            {copiedId === msg.id ? (
-                              <Check className="w-3 h-3 text-neutral-900 dark:text-neutral-100" />
-                            ) : (
-                              <Copy className="w-3 h-3" />
-                            )}
-                            <span>
-                              {copiedId === msg.id ? "Copied" : "Copy ID"}
-                            </span>
-                          </button>
-
-                          <button
-                            onClick={() => onViewReceipt(msg.receipt!)}
-                            className="px-2.5 py-1 rounded bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 text-[11px] font-medium flex items-center gap-1 hover:opacity-90 transition-opacity"
-                          >
-                            <FileText className="w-3 h-3" />
-                            <span>View Details</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+          {messages.length === 0 ? (
+            <div className="py-16 text-center space-y-3">
+              <div className="w-10 h-10 mx-auto rounded-xl bg-neutral-100 dark:bg-neutral-900 flex items-center justify-center text-neutral-700 dark:text-neutral-300">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <h3 className="font-semibold text-sm text-neutral-900 dark:text-neutral-100">
+                What financial mandate should PayAgent handle?
+              </h3>
+              <p className="text-xs text-neutral-500 max-w-sm mx-auto">
+                Issue a natural language mandate like &quot;Pay Netflix $15.99 on 5th, max $20&quot;. PayAgent will autonomously verify pricing, check guardrails, and execute via PayPal Sandbox.
+              </p>
             </div>
-          ))}
+          ) : (
+            messages.map((msg) => (
+              <ChatMessageRenderer
+                key={msg.id}
+                message={msg}
+                onViewReceipt={onViewReceipt}
+                isExpandedDefault={msg.id === "msg-demo-sample"}
+              />
+            ))
+          )}
+
+          {isLoading && (
+            <div className="flex items-center gap-2 text-xs text-neutral-500 py-1 pl-9 animate-pulse">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
+              <span>PayAgent reasoning & verifying live merchant data...</span>
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* Floating Bottom Input */}
-      <div className="p-3 md:p-4 bg-white/90 dark:bg-neutral-950/90 border-t border-neutral-100 dark:border-neutral-900 shrink-0">
+      {/* Floating Bottom Input Area */}
+      <div className="p-3 md:p-4 bg-white/95 dark:bg-neutral-950/95 border-t border-neutral-100 dark:border-neutral-900 shrink-0 backdrop-blur-xs">
         <div className="max-w-2xl mx-auto space-y-2">
           {/* Quick Suggestions */}
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs py-0.5">
+            <span className="text-[10px] text-neutral-400 dark:text-neutral-500 shrink-0 uppercase tracking-wider font-semibold">
+              Try:
+            </span>
             {sampleSuggestions.map((prompt, idx) => (
               <button
                 key={idx}
+                type="button"
                 onClick={() => onSendMessage(prompt)}
                 className="whitespace-nowrap px-3 py-1 rounded-full bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 text-[11px] text-neutral-700 dark:text-neutral-300 transition-colors"
               >
@@ -273,12 +167,12 @@ export function ClaudeChat({
           {/* Rounded Input Container */}
           <div className="rounded-2xl border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 focus-within:border-neutral-900 dark:focus-within:border-neutral-100 transition-colors p-2 px-3 shadow-xs">
             <textarea
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+              value={currentInput}
+              onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask PayAgent to set or execute a mandate..."
               rows={1}
-              className="w-full bg-transparent resize-none outline-none text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 text-xs sm:text-sm min-h-[36px] max-h-[140px] py-1"
+              className="w-full bg-transparent resize-none outline-none text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 text-xs sm:text-sm min-h-[38px] max-h-[140px] py-1"
             />
 
             <div className="flex items-center justify-between pt-1.5 border-t border-neutral-100 dark:border-neutral-800/60">
@@ -286,31 +180,58 @@ export function ClaudeChat({
                 <button
                   type="button"
                   onClick={onToggleStrictMode}
-                  className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors flex items-center gap-1 ${
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-medium border transition-colors flex items-center gap-1.5 ${
                     strictMode
-                      ? "border-neutral-900 dark:border-neutral-100 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900"
-                      : "border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
+                      ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                      : "border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800/80 text-neutral-700 dark:text-neutral-300"
                   }`}
+                  title={
+                    strictMode
+                      ? "Strict mode: Manual user approval required before any PayPal charge"
+                      : "Autonomous mode: Auto-executes within authorized budget ceiling"
+                  }
                 >
-                  <SlidersHorizontal className="w-2.5 h-2.5" />
+                  {strictMode ? (
+                    <ShieldAlert className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                  ) : (
+                    <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                  )}
                   <span>{strictMode ? "Manual Approval" : "Autonomous"}</span>
                 </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => handleSubmit()}
-                disabled={!inputText.trim()}
-                className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
-                  inputText.trim()
-                    ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 shadow hover:opacity-90"
-                    : "bg-neutral-100 dark:bg-neutral-800 text-neutral-400 cursor-not-allowed"
-                }`}
-                title="Send"
-              >
-                <ArrowUp className="w-3.5 h-3.5 stroke-[2.5]" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                {isLoading ? (
+                  <button
+                    type="button"
+                    onClick={onStop}
+                    className="w-7 h-7 rounded-full flex items-center justify-center bg-red-600 hover:bg-red-700 text-white shadow-xs transition-colors"
+                    title="Stop generation"
+                  >
+                    <Square className="w-3 h-3 fill-current" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSubmit()}
+                    disabled={!currentInput.trim()}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                      currentInput.trim()
+                        ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 shadow hover:opacity-90"
+                        : "bg-neutral-100 dark:bg-neutral-800 text-neutral-400 cursor-not-allowed"
+                    }`}
+                    title="Send Mandate (Enter)"
+                  >
+                    <ArrowUp className="w-3.5 h-3.5 stroke-[2.5]" />
+                  </button>
+                )}
+              </div>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between text-[10px] text-neutral-400 dark:text-neutral-500 px-1">
+            <span>Press Enter to send, Shift + Enter for new line</span>
+            <span>PayPal Sandbox MCP Connected</span>
           </div>
         </div>
       </div>

@@ -3,59 +3,77 @@
 import React, { useState, useEffect } from "react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { ResizableSplit } from "@/components/layout/ResizableSplit";
-import { ClaudeChat, ChatMessage } from "@/components/chat/ClaudeChat";
+import { MobileDrawer } from "@/components/layout/MobileDrawer";
+import { ClaudeChat } from "@/components/chat/ClaudeChat";
 import { WorkSurface } from "@/components/dashboard/WorkSurface";
 import { Mandate, Transaction, AuditLog } from "@/components/dashboard/FinancialDashboard";
 import { ReceiptDialog, ReceiptData } from "@/components/dashboard/ReceiptDialog";
 import { ApprovalDialog, ApprovalRequest } from "@/components/dashboard/ApprovalDialog";
 import { CreateMandateDialog } from "@/components/dashboard/CreateMandateDialog";
+import { usePayAgentChat, ChatMessage } from "@/lib/chat/use-payagent-chat";
+
+const INITIAL_MESSAGES: ChatMessage[] = [
+  {
+    id: "msg-welcome",
+    sender: "assistant",
+    text: "Hello. I am PayAgent, your autonomous financial mandate assistant.\n\nSet spending rules like \"Pay Netflix $15.99 on the 5th, max $20\" and I will autonomously verify pricing, check safety limits, and execute transactions via the PayPal Sandbox MCP server.",
+    timestamp: "Just now",
+  },
+  {
+    id: "msg-demo-sample",
+    sender: "assistant",
+    text: "Completed scheduled execution for Netflix Standard HD. The verified price is $15.49, which is within your $20.00 ceiling.",
+    timestamp: "Just now",
+    thoughtProcess: {
+      summary: "Execution Steps (3)",
+      steps: [
+        {
+          step: "Interpreted recurring mandate",
+          status: "done",
+          detail: "Rule: Netflix, Max $20.00 USD",
+        },
+        {
+          step: "Verified merchant price",
+          status: "done",
+          detail: "Scraped live pricing: $15.49/mo",
+        },
+        {
+          step: "Safety ceiling check",
+          status: "done",
+          detail: "$15.49 <= $20.00 ceiling -> Approved",
+        },
+      ],
+    },
+    receipt: {
+      orderId: "ORD-84920491",
+      service: "Netflix Standard HD",
+      planName: "Standard 2-Screen HD Streaming",
+      verifiedPrice: 15.49,
+      budgetCeiling: 20.0,
+      currency: "USD",
+      paymentMethod: "Connected Account",
+      status: "COMPLETED",
+      timestamp: "Oct 31, 2026, 02:45 PM",
+      payerEmail: "user@example.com",
+      sandboxAuthCode: "AUTH-8921",
+    },
+  },
+];
 
 export default function Home() {
   const [splitMode, setSplitMode] = useState<"split" | "chat" | "dashboard">(
     "split"
   );
   const [strictMode, setStrictMode] = useState(false);
-  const [darkMode, setDarkMode] = useState(false); // White by default!
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptData | null>(
     null
   );
   const [approvalRequest, setApprovalRequest] =
     useState<ApprovalRequest | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
 
-  // Apply dark mode class to html element
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [darkMode]);
-
-  // Load live data from SQLite persistent store
-  useEffect(() => {
-    fetch("/api/dashboard")
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load dashboard data");
-        return res.json();
-      })
-      .then((data) => {
-        if (data.mandates && data.mandates.length > 0) {
-          setMandates(data.mandates);
-        }
-        if (data.transactions && data.transactions.length > 0) {
-          setTransactions(data.transactions);
-        }
-        if (data.auditLogs && data.auditLogs.length > 0) {
-          setAuditLogs(data.auditLogs);
-        }
-      })
-      .catch((err) => {
-        console.warn("Could not fetch database records, using defaults:", err);
-      });
-  }, []);
-
-  // Mandates
+  // Mandates state
   const [mandates, setMandates] = useState<Mandate[]>([
     {
       id: "mandate-1",
@@ -92,7 +110,7 @@ export default function Home() {
     },
   ]);
 
-  // Transactions
+  // Transactions state
   const [transactions, setTransactions] = useState<Transaction[]>([
     {
       id: "tx-1",
@@ -140,7 +158,7 @@ export default function Home() {
     },
   ]);
 
-  // Audit Logs
+  // Audit Logs state
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([
     {
       id: "log-1",
@@ -156,8 +174,7 @@ export default function Home() {
       timestamp: "Oct 31, 2026, 02:44 PM",
       eventType: "PRICE_VERIFIED",
       service: "Netflix",
-      details:
-        "Verified Netflix standard subscription price: $15.49/mo.",
+      details: "Verified Netflix standard subscription price: $15.49/mo.",
       severity: "info",
     },
     {
@@ -171,268 +188,98 @@ export default function Home() {
     },
   ]);
 
-  // Messages
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "msg-welcome",
-      sender: "assistant",
-      text: "Hello. I am PayAgent, your autonomous financial mandate assistant.\n\nSet spending rules like \"Pay Netflix $15.99 on the 5th, max $20\" and I will autonomously verify pricing, check safety limits, and execute transactions.",
-      timestamp: "Just now",
-    },
-    {
-      id: "msg-demo-sample",
-      sender: "assistant",
-      text: "Completed scheduled execution for Netflix Standard HD. The verified price is $15.49, which is within your $20.00 ceiling.",
-      timestamp: "Just now",
-      thoughtProcess: {
-        summary: "Execution Steps (3)",
-        steps: [
-          {
-            step: "Interpreted recurring mandate",
-            status: "done",
-            detail: "Rule: Netflix, Max $20.00 USD",
-          },
-          {
-            step: "Verified merchant price",
-            status: "done",
-            detail: "Scraped live pricing: $15.49/mo",
-          },
-          {
-            step: "Safety ceiling check",
-            status: "done",
-            detail: "$15.49 <= $20.00 ceiling -> Approved",
-          },
-        ],
-      },
-      receipt: {
-        orderId: "ORD-84920491",
-        service: "Netflix Standard HD",
-        planName: "Standard 2-Screen HD Streaming",
-        verifiedPrice: 15.49,
-        budgetCeiling: 20.0,
-        currency: "USD",
-        paymentMethod: "Connected Account",
-        status: "COMPLETED",
-        timestamp: "Oct 31, 2026, 02:45 PM",
-        payerEmail: "user@example.com",
-        sandboxAuthCode: "AUTH-8921",
-      },
-    },
-  ]);
-
-  // Send message with streaming response from Gemini agent
-  const handleSendMessage = async (text: string) => {
-    const userMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      sender: "user",
-      text,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    };
-
-    const assistantMsgId = `msg-resp-${Date.now()}`;
-    const initialAssistantMsg: ChatMessage = {
-      id: assistantMsgId,
-      sender: "assistant",
-      text: "",
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      thoughtProcess: {
-        summary: "Analyzing mandate...",
-        steps: [],
-      },
-    };
-
-    setMessages((prev) => [...prev, userMsg, initialAssistantMsg]);
-
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          strictMode,
-          mandates,
-        }),
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error("Chat request failed");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let accumulatedText = "";
-      const currentSteps: { step: string; status: "done" | "running" | "waiting"; detail?: string }[] = [];
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const event = JSON.parse(line.slice(6));
-
-            if (event.type === "token" && event.text) {
-              accumulatedText += event.text;
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMsgId
-                    ? { ...m, text: accumulatedText }
-                    : m
-                )
-              );
-            } else if (event.type === "step" && event.step) {
-              const existingIdx = currentSteps.findIndex(
-                (s) => s.step === event.step.step
-              );
-              if (existingIdx >= 0) {
-                currentSteps[existingIdx] = event.step;
-              } else {
-                currentSteps.push(event.step);
-              }
-
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMsgId
-                    ? {
-                        ...m,
-                        thoughtProcess: {
-                          summary: `Autonomous Reasoning (${currentSteps.length} steps)`,
-                          steps: [...currentSteps],
-                        },
-                      }
-                    : m
-                )
-              );
-            } else if (event.type === "thought" && event.thought) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMsgId
-                    ? {
-                        ...m,
-                        thoughtProcess: event.thought,
-                      }
-                    : m
-                )
-              );
-            } else if (event.type === "receipt" && event.receipt) {
-              const receiptData = event.receipt as ReceiptData;
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMsgId
-                    ? {
-                        ...m,
-                        receipt: receiptData,
-                      }
-                    : m
-                )
-              );
-
-              const newTx: Transaction = {
-                id: `tx-${Date.now()}`,
-                orderId: receiptData.orderId,
-                service: receiptData.service,
-                amount: receiptData.verifiedPrice,
-                currency: receiptData.currency || "USD",
-                status: "COMPLETED",
-                timestamp: new Date().toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-                receiptData: receiptData,
-              };
-
-              const newLog: AuditLog = {
-                id: `log-${Date.now()}`,
-                timestamp: new Date().toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-                eventType: "PAYMENT_CAPTURED",
-                service: receiptData.service,
-                details: `Autonomous execution: Scraped ${receiptData.service} ($${receiptData.verifiedPrice.toFixed(
-                  2
-                )}) verified <= $${receiptData.budgetCeiling.toFixed(
-                  2
-                )}. Captured ${receiptData.orderId}.`,
-                severity: "success",
-              };
-
-              setTransactions((prev) => [newTx, ...prev]);
-              setAuditLogs((prev) => [newLog, ...prev]);
-
-              fetch("/api/transactions", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(newTx),
-              }).catch((e) => console.error(e));
-
-              fetch("/api/audit-logs", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(newLog),
-              }).catch((e) => console.error(e));
-            } else if (event.type === "done" && event.text && !accumulatedText) {
-              accumulatedText = event.text;
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMsgId
-                    ? { ...m, text: accumulatedText }
-                    : m
-                )
-              );
-            }
-          } catch (parseErr) {
-            console.warn("SSE parse error:", parseErr);
-          }
+  // Load persistent records from SQLite backend
+  useEffect(() => {
+    fetch("/api/dashboard")
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load dashboard data");
+        return res.json();
+      })
+      .then((data) => {
+        if (data.mandates && data.mandates.length > 0) {
+          setMandates(data.mandates);
         }
-      }
+        if (data.transactions && data.transactions.length > 0) {
+          setTransactions(data.transactions);
+        }
+        if (data.auditLogs && data.auditLogs.length > 0) {
+          setAuditLogs(data.auditLogs);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not fetch database records, using defaults:", err);
+      });
+  }, []);
 
-      // Check if strict mode approval is required
-      if (strictMode && accumulatedText.includes("Strict Approval Mode is ENABLED")) {
-        setApprovalRequest({
-          id: `req-${Date.now()}`,
-          service: text.toLowerCase().includes("netflix")
-            ? "Netflix Standard HD"
-            : text.toLowerCase().includes("spotify")
-            ? "Spotify Premium"
-            : "Merchant Service",
-          detectedPrice: 15.49,
-          budgetCeiling: 20.0,
-          reason: "Strict Approval Mode is active. Please confirm before completing PayPal charge.",
-          currency: "USD",
-        });
-      }
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : "Error streaming response";
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMsgId
-            ? {
-                ...m,
-                text: `Agent Error: ${errorMsg}`,
-              }
-            : m
-        )
-      );
-    }
+  const handleReceiptCaptured = (receiptData: ReceiptData) => {
+    const newTx: Transaction = {
+      id: `tx-${Date.now()}`,
+      orderId: receiptData.orderId,
+      service: receiptData.service,
+      amount: receiptData.verifiedPrice,
+      currency: receiptData.currency || "USD",
+      status: "COMPLETED",
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      receiptData,
+    };
+
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      eventType: "PAYMENT_CAPTURED",
+      service: receiptData.service,
+      details: `Autonomous execution: Scraped ${receiptData.service} ($${receiptData.verifiedPrice.toFixed(
+        2
+      )}) verified <= $${receiptData.budgetCeiling.toFixed(
+        2
+      )}. Captured ${receiptData.orderId}.`,
+      severity: "success",
+    };
+
+    setTransactions((prev) => [newTx, ...prev]);
+    setAuditLogs((prev) => [newLog, ...prev]);
+
+    fetch("/api/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newTx),
+    }).catch((e) => console.error(e));
+
+    fetch("/api/audit-logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newLog),
+    }).catch((e) => console.error(e));
   };
+
+  // Vercel AI SDK chat integration hook
+  const {
+    messages,
+    input,
+    setInput,
+    sendMessage,
+    isLoading,
+    stop,
+    clearChat,
+    setMessages,
+  } = usePayAgentChat({
+    initialMessages: INITIAL_MESSAGES,
+    strictMode,
+    mandates,
+    onReceiptCaptured: handleReceiptCaptured,
+    onApprovalRequired: (req) => setApprovalRequest(req),
+  });
 
   const handleTriggerMandate = (id: string) => {
     const target = mandates.find((m) => m.id === id);
     if (!target) return;
-    handleSendMessage(`Execute mandate now for ${target.service}`);
+    sendMessage(`Execute mandate now for ${target.service}`);
   };
 
   const handleApprove = () => {
@@ -608,7 +455,6 @@ export default function Home() {
     };
     setAuditLogs((prev) => [log, ...prev]);
 
-    // Persist new mandate & log to SQLite
     fetch("/api/mandates", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -623,18 +469,18 @@ export default function Home() {
   };
 
   return (
-    <div className={`h-screen w-screen flex flex-col ${darkMode ? "dark bg-neutral-950 text-neutral-100" : "bg-white text-neutral-900"} overflow-hidden font-sans transition-colors`}>
+    <div className="h-screen w-screen flex flex-col bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 overflow-hidden font-sans transition-colors">
       {/* Top Header */}
       <AppHeader
         splitMode={splitMode}
         onSplitModeChange={setSplitMode}
         strictMode={strictMode}
         onToggleStrictMode={() => setStrictMode((prev) => !prev)}
-        darkMode={darkMode}
-        onToggleDarkMode={() => setDarkMode((prev) => !prev)}
+        mandatesCount={mandates.length}
+        onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
       />
 
-      {/* Main Resizable Split (Clean Monochrome) */}
+      {/* Main Resizable Split View */}
       <div className="flex-1 overflow-hidden">
         <ResizableSplit
           splitMode={splitMode}
@@ -642,11 +488,15 @@ export default function Home() {
           left={
             <ClaudeChat
               messages={messages}
-              onSendMessage={handleSendMessage}
-              onClearChat={() => setMessages([])}
+              input={input}
+              onInputChange={(val) => setInput(val)}
+              onSendMessage={sendMessage}
+              onClearChat={clearChat}
               onViewReceipt={(receipt) => setSelectedReceipt(receipt)}
               strictMode={strictMode}
               onToggleStrictMode={() => setStrictMode((prev) => !prev)}
+              isLoading={isLoading}
+              onStop={stop}
             />
           }
           right={
@@ -661,6 +511,18 @@ export default function Home() {
           }
         />
       </div>
+
+      {/* Responsive Mobile Drawer (Bottom Sheet on Mobile) */}
+      <MobileDrawer
+        isOpen={isMobileDrawerOpen}
+        onClose={() => setIsMobileDrawerOpen(false)}
+        mandates={mandates}
+        transactions={transactions}
+        auditLogs={auditLogs}
+        onTriggerMandate={handleTriggerMandate}
+        onViewReceipt={(receipt) => setSelectedReceipt(receipt)}
+        onCreateMandateClick={() => setIsCreateOpen(true)}
+      />
 
       {/* Dialog Modals */}
       <ReceiptDialog
