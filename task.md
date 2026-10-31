@@ -1,15 +1,24 @@
 # PayAgent — Autonomous Financial & Agentic Commerce Agent
 > **PayPal AI Hackathon 2026**  
-> **Official Miro Board:** [https://miro.com/app/board/uXjVETEzN_g=/](https://miro.com/app/board/uXjVETEzN_g=/)
+> **Official Miro Board:** [https://miro.com/app/board/uXjVETEzN_g=/](https://miro.com/app/board/uXjVETEzN_g=/)  
+> **GitHub Repository:** [https://github.com/abrarnasirjaffari/PayAgent](https://github.com/abrarnasirjaffari/PayAgent)
 
 ---
 
-## ⚠️ CRITICAL INSTRUCTION: ALWAYS CHECK THE MIRO BOARD
+## ⚠️ CRITICAL INSTRUCTION 1: ALWAYS CHECK THE MIRO BOARD
 > **MANDATORY FOR ALL DEVELOPMENT WORK:**  
 > **Always inspect and refer to the live Miro Board before and during every stage:**  
 > **🔗 [https://miro.com/app/board/uXjVETEzN_g=/](https://miro.com/app/board/uXjVETEzN_g=/)**  
 > 
 > The Miro board contains the canonical system architecture diagrams, visual wireframes, data flows, and real-time updates. If any design requirement, data schema, or task detail is unclear, always verify against the Miro board first!
+
+---
+
+## ⚡ CRITICAL INSTRUCTION 2: COMMIT & PUSH POLICY
+> **MANDATORY FOR AGENT WORKFLOW:**  
+> **After completing each task, subtask, or milestone, the agent MUST ALWAYS explicitly ask the user:**  
+> *"Should I commit and push these changes to GitHub now?"*  
+> **Only when the user confirms with "yes" (or equivalent) will the agent proceed to create a structured git commit and push to `origin main`.** Do not push unconfirmed changes or skip asking.
 
 ---
 
@@ -185,7 +194,8 @@ Instead of a generic checkout button, PayAgent enables users to issue natural la
   - [ ] Create `render.yaml` or configure Render Web Service build/start commands.
   - [ ] Configure environment variables securely on Render.
   - [ ] Test live staging URL for 100% functionality and uptime (targets $1,000 Render award).
-- [ ] **4.2 Public Open-Source GitHub Repository**
+- [x] **4.2 Public Open-Source GitHub Repository**
+  - [x] Create public GitHub repository: [https://github.com/abrarnasirjaffari/PayAgent](https://github.com/abrarnasirjaffari/PayAgent)
   - [ ] Add MIT License file.
   - [ ] Create comprehensive `README.md` with architecture diagram, local setup instructions, and feature list.
   - [ ] Create `.env.example` documenting all necessary keys (PayPal Sandbox, Gemini API, PostHog).
@@ -205,6 +215,7 @@ Instead of a generic checkout button, PayAgent enables users to issue natural la
 ---
 
 ## 📌 Important Reference Links
+- **GitHub Repository**: [https://github.com/abrarnasirjaffari/PayAgent](https://github.com/abrarnasirjaffari/PayAgent)
 - **Live Miro Canvas**: [https://miro.com/app/board/uXjVETEzN_g=/](https://miro.com/app/board/uXjVETEzN_g=/)
 - **PayPal AI Toolkit Repository**: [https://github.com/paypal/AI-Toolkit](https://github.com/paypal/AI-Toolkit)
 - **PayPal AI Developer Portal**: [https://docs.paypal.ai](https://docs.paypal.ai)
