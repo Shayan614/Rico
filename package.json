@@ -18,6 +18,8 @@
   "dependencies": {
     "@ai-sdk/react": "^4.0.163",
     "@google/genai": "^2.32.0",
+    "ag-grid-community": "^36.2.0",
+    "ag-grid-react": "^36.2.0",
     "ai": "^7.0.159",
     "better-sqlite3": "^13.0.3",
     "class-variance-authority": "^0.7.1",

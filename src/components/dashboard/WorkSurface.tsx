@@ -1,21 +1,22 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   CreditCard,
   ShieldCheck,
   TrendingDown,
   Plus,
-  Play,
-  FileText,
   Activity,
-  Copy,
-  Check,
   CheckCircle2,
   AlertCircle,
+  Table as TableIcon,
 } from "lucide-react";
 import { Mandate, Transaction, AuditLog } from "./FinancialDashboard";
 import { ReceiptData } from "./ReceiptDialog";
+import { AgGridMandatesTable } from "./AgGridMandatesTable";
+import { AgGridTransactionsTable } from "./AgGridTransactionsTable";
+import { useTheme } from "next-themes";
+import { Badge } from "@/components/ui/badge";
 
 interface WorkSurfaceProps {
   mandates: Mandate[];
@@ -37,7 +38,16 @@ export function WorkSurface({
   const [activeTab, setActiveTab] = useState<
     "mandates" | "transactions" | "audit"
   >("mandates");
-  const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
+  const { theme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isDarkMode = mounted
+    ? resolvedTheme === "dark" || theme === "dark"
+    : false;
 
   const totalDisbursed = transactions
     .filter((t) => t.status === "COMPLETED")
@@ -47,64 +57,92 @@ export function WorkSurface({
     (l) => l.eventType === "GUARDRAIL_BLOCKED"
   ).length;
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard?.writeText(text);
-    setCopiedOrderId(text);
-    setTimeout(() => setCopiedOrderId(null), 2000);
-  };
-
   return (
     <div className="h-full flex flex-col bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 overflow-hidden transition-colors">
-      {/* Top Tab Bar */}
-      <div className="h-10 px-4 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/50 flex items-center justify-between select-none shrink-0">
+      {/* Top Tab Bar & Actions */}
+      <div className="h-11 px-4 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/40 flex items-center justify-between select-none shrink-0">
         <div className="flex items-center space-x-1">
           <button
+            type="button"
             onClick={() => setActiveTab("mandates")}
-            className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 transition-colors ${
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
               activeTab === "mandates"
-                ? "border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100 bg-white dark:bg-neutral-900"
-                : "border-transparent text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+                ? "bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 shadow-xs border border-neutral-200 dark:border-neutral-700"
+                : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
             }`}
           >
-            Mandates ({mandates.length})
+            <span>Mandates</span>
+            <Badge
+              variant="outline"
+              className="text-[9px] py-0 px-1 border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-900"
+            >
+              {mandates.length}
+            </Badge>
           </button>
+
           <button
+            type="button"
             onClick={() => setActiveTab("transactions")}
-            className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 transition-colors ${
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
               activeTab === "transactions"
-                ? "border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100 bg-white dark:bg-neutral-900"
-                : "border-transparent text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+                ? "bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 shadow-xs border border-neutral-200 dark:border-neutral-700"
+                : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
             }`}
           >
-            Transactions ({transactions.length})
+            <span>Transactions</span>
+            <Badge
+              variant="outline"
+              className="text-[9px] py-0 px-1 border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-900"
+            >
+              {transactions.length}
+            </Badge>
           </button>
+
           <button
+            type="button"
             onClick={() => setActiveTab("audit")}
-            className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 transition-colors ${
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
               activeTab === "audit"
-                ? "border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100 bg-white dark:bg-neutral-900"
-                : "border-transparent text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+                ? "bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 shadow-xs border border-neutral-200 dark:border-neutral-700"
+                : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
             }`}
           >
-            Activity ({auditLogs.length})
+            <span>Activity Log</span>
+            <Badge
+              variant="outline"
+              className="text-[9px] py-0 px-1 border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-900"
+            >
+              {auditLogs.length}
+            </Badge>
           </button>
         </div>
 
-        <button
-          onClick={onCreateMandateClick}
-          className="h-6 px-2.5 rounded bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200 text-xs font-medium flex items-center gap-1 transition-colors"
-        >
-          <Plus className="w-3 h-3" />
-          <span>New Mandate</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <Badge
+            variant="outline"
+            className="hidden sm:inline-flex text-[9px] py-0 px-1.5 border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300 font-mono items-center gap-1"
+          >
+            <TableIcon className="w-2.5 h-2.5" />
+            AG Grid UI Active
+          </Badge>
+
+          <button
+            type="button"
+            onClick={onCreateMandateClick}
+            className="h-7 px-2.5 rounded-md bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200 text-xs font-medium flex items-center gap-1 transition-colors shadow-xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>New Mandate</span>
+          </button>
+        </div>
       </div>
 
-      {/* KPI Cards (Minimalist Two-Tone) */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 p-3 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/20 shrink-0 text-xs">
-        <div className="p-2.5 rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+        <div className="p-2.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-xs">
           <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400 text-[11px] mb-1">
             <span>Active Mandates</span>
-            <CreditCard className="w-3.5 h-3.5" />
+            <CreditCard className="w-3.5 h-3.5 text-blue-500" />
           </div>
           <div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
             {mandates.filter((m) => m.status === "ACTIVE").length}
@@ -112,21 +150,21 @@ export function WorkSurface({
           <span className="text-[10px] text-neutral-500">Autonomous rules</span>
         </div>
 
-        <div className="p-2.5 rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+        <div className="p-2.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-xs">
           <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400 text-[11px] mb-1">
-            <span>Total Executed</span>
-            <TrendingDown className="w-3.5 h-3.5" />
+            <span>Total Captured</span>
+            <TrendingDown className="w-3.5 h-3.5 text-emerald-500" />
           </div>
-          <div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
+          <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
             ${totalDisbursed.toFixed(2)}
           </div>
-          <span className="text-[10px] text-neutral-500">Captured orders</span>
+          <span className="text-[10px] text-neutral-500">PayPal Sandbox MCP</span>
         </div>
 
-        <div className="p-2.5 rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+        <div className="p-2.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-xs">
           <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400 text-[11px] mb-1">
             <span>Safety Intercepts</span>
-            <ShieldCheck className="w-3.5 h-3.5" />
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
           </div>
           <div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
             {blockedCount}
@@ -134,158 +172,49 @@ export function WorkSurface({
           <span className="text-[10px] text-neutral-500">Ceilings enforced</span>
         </div>
 
-        <div className="p-2.5 rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+        <div className="p-2.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-xs">
           <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400 text-[11px] mb-1">
-            <span>Avg Latency</span>
-            <Activity className="w-3.5 h-3.5" />
+            <span>Avg Reasoning Time</span>
+            <Activity className="w-3.5 h-3.5 text-purple-500" />
           </div>
           <div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
             1.18s
           </div>
-          <span className="text-[10px] text-neutral-500">Decision time</span>
+          <span className="text-[10px] text-neutral-500">CDP + Gemini Flash</span>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Main Grid Content Area */}
+      <div className="flex-1 overflow-hidden p-3">
         {activeTab === "mandates" && (
-          <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
-            <div className="grid grid-cols-12 px-4 py-2 text-[11px] font-semibold text-neutral-500 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/80 sticky top-0 border-b border-neutral-200 dark:border-neutral-800">
-              <span className="col-span-4">Service & Category</span>
-              <span className="col-span-2">Ceiling Cap</span>
-              <span className="col-span-2">Verified Price</span>
-              <span className="col-span-2">Schedule</span>
-              <span className="col-span-2 text-right">Action</span>
-            </div>
-
-            {mandates.map((m) => (
-              <div
-                key={m.id}
-                className="grid grid-cols-12 px-4 py-3 text-xs items-center hover:bg-neutral-50 dark:hover:bg-neutral-900/40 transition-colors"
-              >
-                <div className="col-span-4 flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center font-bold text-xs text-neutral-900 dark:text-neutral-100">
-                    {m.service.substring(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="font-semibold text-neutral-900 dark:text-neutral-100">
-                      {m.service}
-                    </div>
-                    <div className="text-[10px] text-neutral-500">
-                      {m.category}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="col-span-2 font-semibold text-neutral-800 dark:text-neutral-200">
-                  ${m.budgetCeiling.toFixed(2)} {m.currency}
-                </div>
-
-                <div className="col-span-2">
-                  <span className="font-semibold text-neutral-900 dark:text-neutral-100">
-                    ${m.lastScrapedPrice.toFixed(2)}
-                  </span>
-                  <span className="text-[10px] text-neutral-500 block">
-                    Verified
-                  </span>
-                </div>
-
-                <div className="col-span-2 text-neutral-700 dark:text-neutral-300">
-                  <div>{m.recurrence}</div>
-                  <div className="text-[10px] text-neutral-500">{m.nextRun}</div>
-                </div>
-
-                <div className="col-span-2 text-right">
-                  <button
-                    onClick={() => onTriggerMandate(m.id)}
-                    className="px-2.5 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-900 hover:text-white dark:hover:bg-neutral-100 dark:hover:text-neutral-900 text-neutral-800 dark:text-neutral-200 text-[11px] inline-flex items-center gap-1 transition-colors"
-                  >
-                    <Play className="w-3 h-3" />
-                    <span>Run</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          <AgGridMandatesTable
+            mandates={mandates}
+            onTriggerMandate={onTriggerMandate}
+            isDarkMode={isDarkMode}
+          />
         )}
 
         {activeTab === "transactions" && (
-          <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
-            <div className="grid grid-cols-12 px-4 py-2 text-[11px] font-semibold text-neutral-500 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/80 sticky top-0 border-b border-neutral-200 dark:border-neutral-800">
-              <span className="col-span-4">Order ID & Merchant</span>
-              <span className="col-span-2">Amount</span>
-              <span className="col-span-2">Status</span>
-              <span className="col-span-2">Timestamp</span>
-              <span className="col-span-2 text-right">Receipt</span>
-            </div>
-
-            {transactions.map((tx) => (
-              <div
-                key={tx.id}
-                className="grid grid-cols-12 px-4 py-3 text-xs items-center hover:bg-neutral-50 dark:hover:bg-neutral-900/40 transition-colors"
-              >
-                <div className="col-span-4">
-                  <div className="flex items-center gap-1.5 font-mono text-neutral-600 dark:text-neutral-400 text-[11px]">
-                    <span>{tx.orderId}</span>
-                    <button
-                      onClick={() => handleCopy(tx.orderId)}
-                      className="text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
-                    >
-                      {copiedOrderId === tx.orderId ? (
-                        <Check className="w-3 h-3 text-neutral-900 dark:text-neutral-100" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                    </button>
-                  </div>
-                  <div className="text-neutral-900 dark:text-neutral-100 font-medium">
-                    {tx.service}
-                  </div>
-                </div>
-
-                <div className="col-span-2 font-bold text-neutral-900 dark:text-neutral-100">
-                  ${tx.amount.toFixed(2)} {tx.currency}
-                </div>
-
-                <div className="col-span-2">
-                  <span className="px-2 py-0.5 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 text-[10px] font-medium">
-                    {tx.status}
-                  </span>
-                </div>
-
-                <div className="col-span-2 text-neutral-500 text-[11px]">
-                  {tx.timestamp}
-                </div>
-
-                <div className="col-span-2 text-right">
-                  {tx.receiptData && (
-                    <button
-                      onClick={() => onViewReceipt(tx.receiptData!)}
-                      className="px-2 py-1 rounded text-[11px] text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors inline-flex items-center gap-1"
-                    >
-                      <FileText className="w-3 h-3" />
-                      <span>Details</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+          <AgGridTransactionsTable
+            transactions={transactions}
+            onViewReceipt={onViewReceipt}
+            isDarkMode={isDarkMode}
+          />
         )}
 
         {activeTab === "audit" && (
-          <div className="p-3 space-y-2.5">
+          <div className="h-full overflow-y-auto space-y-2 pr-1">
             {auditLogs.map((log) => (
               <div
                 key={log.id}
-                className="p-3 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40 flex items-start justify-between gap-3 text-xs"
+                className="p-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/60 flex items-start justify-between gap-3 text-xs shadow-xs"
               >
                 <div className="flex items-start gap-2.5">
-                  <div className="w-6 h-6 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 mt-0.5">
+                  <div className="w-6 h-6 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 mt-0.5">
                     {log.severity === "danger" || log.severity === "warning" ? (
-                      <AlertCircle className="w-3.5 h-3.5 text-neutral-800 dark:text-neutral-200" />
+                      <AlertCircle className="w-3.5 h-3.5 text-red-500" />
                     ) : (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-neutral-800 dark:text-neutral-200" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                     )}
                   </div>
                   <div>
@@ -293,17 +222,20 @@ export function WorkSurface({
                       <span className="font-semibold text-neutral-900 dark:text-neutral-100">
                         {log.service}
                       </span>
-                      <span className="px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-[10px] text-neutral-700 dark:text-neutral-300 font-mono">
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] font-mono py-0 px-1 border-neutral-200 dark:border-neutral-700"
+                      >
                         {log.eventType}
-                      </span>
+                      </Badge>
                     </div>
-                    <p className="text-neutral-600 dark:text-neutral-400 mt-1 leading-relaxed">
+                    <p className="text-neutral-600 dark:text-neutral-400 mt-1 leading-relaxed text-[11px]">
                       {log.details}
                     </p>
                   </div>
                 </div>
 
-                <div className="text-[10px] text-neutral-500 whitespace-nowrap">
+                <div className="text-[10px] text-neutral-400 dark:text-neutral-500 font-mono whitespace-nowrap">
                   {log.timestamp}
                 </div>
               </div>
