@@ -8,16 +8,14 @@ import {
   ChevronRight,
   CheckCircle2,
   Loader2,
-  Globe,
-  Receipt,
   Copy,
   Check,
-  FileText,
   ShieldCheck,
 } from "lucide-react";
 import { ChatMessage } from "@/lib/chat/use-payagent-chat";
 import { ReceiptData } from "@/components/dashboard/ReceiptDialog";
-import { Badge } from "@/components/ui/badge";
+import { BrowserStepIndicator } from "./BrowserStepIndicator";
+import { GenerativeReceiptCard } from "./GenerativeReceiptCard";
 
 interface ChatMessageRendererProps {
   message: ChatMessage;
@@ -31,13 +29,13 @@ export function ChatMessageRenderer({
   isExpandedDefault = false,
 }: ChatMessageRendererProps) {
   const [isExpanded, setIsExpanded] = useState<boolean>(isExpandedDefault);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedText, setCopiedText] = useState<boolean>(false);
 
-  const handleCopy = (text: string, id: string) => {
+  const handleCopyText = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(text);
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
+      navigator.clipboard.writeText(message.text);
+      setCopiedText(true);
+      setTimeout(() => setCopiedText(false), 2000);
     }
   };
 
@@ -118,13 +116,12 @@ export function ChatMessageRenderer({
           </div>
         )}
 
-        {/* Live Browser Status Pill */}
-        {message.statusPill && (
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-[11px] text-blue-700 dark:text-blue-300 animate-in fade-in duration-200">
-            <Globe className="w-3 h-3 text-blue-500 animate-pulse" />
-            <span className="font-medium">{message.statusPill.step}</span>
-          </div>
-        )}
+        {/* Live Multi-Phase Browser Progress Indicator Pill */}
+        <BrowserStepIndicator
+          statusPill={message.statusPill}
+          steps={message.thoughtProcess?.steps}
+          serviceName={message.receipt?.service}
+        />
 
         {/* Text Body */}
         {message.text && (
@@ -135,85 +132,10 @@ export function ChatMessageRenderer({
 
         {/* Generative UI Payment Receipt Card */}
         {message.receipt && (
-          <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/80 p-4 text-xs space-y-3 shadow-xs">
-            <div className="flex items-center justify-between pb-2.5 border-b border-neutral-200 dark:border-neutral-800">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                  <Receipt className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="font-semibold text-neutral-900 dark:text-neutral-100 block">
-                    Digital Payment Receipt
-                  </span>
-                  <span className="text-[10px] font-mono text-neutral-500">
-                    {message.receipt.orderId}
-                  </span>
-                </div>
-              </div>
-              <Badge
-                variant="outline"
-                className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 text-[10px] font-medium"
-              >
-                Captured & Verified
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2.5 text-[11px]">
-              <div>
-                <span className="text-neutral-500 block">Service:</span>
-                <span className="font-medium text-neutral-900 dark:text-neutral-100">
-                  {message.receipt.service}
-                </span>
-              </div>
-              <div>
-                <span className="text-neutral-500 block">Plan:</span>
-                <span className="text-neutral-700 dark:text-neutral-300">
-                  {message.receipt.planName}
-                </span>
-              </div>
-              <div>
-                <span className="text-neutral-500 block">Verified Price:</span>
-                <span className="font-bold text-neutral-900 dark:text-neutral-100 text-sm">
-                  ${message.receipt.verifiedPrice.toFixed(2)}{" "}
-                  {message.receipt.currency}
-                </span>
-              </div>
-              <div>
-                <span className="text-neutral-500 block">Ceiling Limit:</span>
-                <span className="text-neutral-700 dark:text-neutral-300">
-                  ${message.receipt.budgetCeiling.toFixed(2)}{" "}
-                  {message.receipt.currency}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-2.5 border-t border-neutral-200 dark:border-neutral-800 text-[11px]">
-              <button
-                type="button"
-                onClick={() => handleCopy(message.receipt!.orderId, message.id)}
-                className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 flex items-center gap-1 transition-colors"
-                title="Copy PayPal Order ID"
-              >
-                {copiedId === message.id ? (
-                  <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                ) : (
-                  <Copy className="w-3 h-3" />
-                )}
-                <span>
-                  {copiedId === message.id ? "Copied ID" : "Copy Order ID"}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onViewReceipt(message.receipt!)}
-                className="px-2.5 py-1 rounded bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 text-[11px] font-medium flex items-center gap-1.5 hover:opacity-90 transition-opacity"
-              >
-                <FileText className="w-3 h-3" />
-                <span>View Full Details</span>
-              </button>
-            </div>
-          </div>
+          <GenerativeReceiptCard
+            receipt={message.receipt}
+            onViewReceipt={onViewReceipt}
+          />
         )}
 
         {/* Footer info: Timestamp and copy button */}
@@ -222,10 +144,10 @@ export function ChatMessageRenderer({
           <span>•</span>
           <button
             type="button"
-            onClick={() => handleCopy(message.text, `${message.id}-text`)}
+            onClick={handleCopyText}
             className="hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors flex items-center gap-1"
           >
-            {copiedId === `${message.id}-text` ? (
+            {copiedText ? (
               <>
                 <Check className="w-2.5 h-2.5 text-emerald-500" />
                 <span>Copied</span>
