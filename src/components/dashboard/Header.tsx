@@ -27,7 +27,7 @@ export function Header({ strictMode, onToggleStrictMode }: HeaderProps) {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-1.5">
-                PayAgent
+                Rico
                 <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
                   PayPal AI 2026
                 </span>
@@ -96,7 +96,7 @@ export function Header({ strictMode, onToggleStrictMode }: HeaderProps) {
           </a>
 
           <a
-            href="https://github.com/abrarnasirjaffari/PayAgent"
+            href="https://github.com/abrarnasirjaffari/Rico"
             target="_blank"
             rel="noopener noreferrer"
           >

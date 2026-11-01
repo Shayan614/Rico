@@ -116,10 +116,10 @@ export function ClaudeChat({
                 <Sparkles className="w-5 h-5" />
               </div>
               <h3 className="font-semibold text-sm text-neutral-900 dark:text-neutral-100">
-                What financial mandate should PayAgent handle?
+                What financial mandate should Rico handle?
               </h3>
               <p className="text-xs text-neutral-500 max-w-sm mx-auto">
-                Issue a natural language mandate like &quot;Pay Netflix $15.99 on 5th, max $20&quot;. PayAgent will autonomously verify pricing, check guardrails, and execute via PayPal Sandbox.
+                Issue a natural language mandate like &quot;Pay Netflix $15.99 on 5th, max $20&quot;. Rico will autonomously verify pricing, check guardrails, and execute via PayPal Sandbox.
               </p>
             </div>
           ) : (
@@ -136,7 +136,7 @@ export function ClaudeChat({
           {isLoading && (
             <div className="flex items-center gap-2 text-xs text-neutral-500 py-1 pl-9 animate-pulse">
               <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
-              <span>PayAgent reasoning & verifying live merchant data...</span>
+              <span>Rico reasoning & verifying live merchant data...</span>
             </div>
           )}
 
@@ -170,7 +170,7 @@ export function ClaudeChat({
               value={currentInput}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask PayAgent to set or execute a mandate..."
+              placeholder="Ask Rico to set or execute a mandate..."
               rows={1}
               className="w-full bg-transparent resize-none outline-none text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 text-xs sm:text-sm min-h-[38px] max-h-[140px] py-1"
             />

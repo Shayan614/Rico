@@ -264,7 +264,7 @@ export function AgGridTransactionsTable({
 
   const handleExportCsv = () => {
     gridRef.current?.api.exportDataAsCsv({
-      fileName: `PayAgent-Transactions-${new Date().toISOString().slice(0, 10)}.csv`,
+      fileName: `Rico-Transactions-${new Date().toISOString().slice(0, 10)}.csv`,
     });
   };
 

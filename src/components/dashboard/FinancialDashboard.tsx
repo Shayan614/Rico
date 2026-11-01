@@ -400,7 +400,7 @@ export function FinancialDashboard({
                 Live Architecture & Miro Synchronization
               </h3>
               <p className="text-slate-300 leading-relaxed mb-3">
-                PayAgent connects natural language mandates to real-world browser execution and official PayPal AI MCP Server payments. Telemetry, token usage, and anomaly triggers are logged directly into PostHog.
+                Rico connects natural language mandates to real-world browser execution and official PayPal AI MCP Server payments. Telemetry, token usage, and anomaly triggers are logged directly into PostHog.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                 <div className="p-3 bg-slate-950/80 rounded-lg border border-slate-800">

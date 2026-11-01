@@ -23,7 +23,7 @@ const INITIAL_MESSAGES: ChatMessage[] = [
   {
     id: "msg-welcome",
     sender: "assistant",
-    text: "Hello. I am PayAgent, your autonomous financial mandate assistant.\n\nSet spending rules like \"Pay Netflix $15.99 on the 5th, max $20\" and I will autonomously verify pricing, check safety limits, and execute transactions via the PayPal Sandbox MCP server.",
+    text: "Hello. I am Rico, your autonomous financial mandate assistant.\n\nSet spending rules like \"Pay Netflix $15.99 on the 5th, max $20\" and I will autonomously verify pricing, check safety limits, and execute transactions via the PayPal Sandbox MCP server.",
     timestamp: "Just now",
   },
   {

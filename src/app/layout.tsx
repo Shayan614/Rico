@@ -16,7 +16,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "PayAgent — Autonomous Financial & Agentic Commerce Agent",
+  title: "Rico — Autonomous Financial & Agentic Commerce Agent",
   description: "Next.js 14 AI Agent command center powered by Gemini, Playwright, and PayPal AI Toolkit",
 };
 

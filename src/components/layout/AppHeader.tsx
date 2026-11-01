@@ -59,12 +59,12 @@ export function AppHeader({
       {/* Left: Brand & Status */}
       <div className="flex items-center gap-3">
         <div className="w-6 h-6 rounded-md bg-neutral-900 dark:bg-white flex items-center justify-center text-white dark:text-neutral-950 font-bold text-xs shadow-xs">
-          P
+          R
         </div>
         <div>
           <div className="flex items-center gap-2">
             <span className="font-semibold text-xs tracking-tight text-neutral-900 dark:text-neutral-100">
-              PayAgent
+              Rico
             </span>
             <Badge
               variant="outline"

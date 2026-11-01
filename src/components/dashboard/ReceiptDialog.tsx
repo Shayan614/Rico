@@ -83,7 +83,7 @@ Status: 100% VERIFIED & CAPTURED ON PAYPAL SANDBOX
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `PayAgent-Receipt-${receipt.orderId}.txt`;
+    link.download = `Rico-Receipt-${receipt.orderId}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
