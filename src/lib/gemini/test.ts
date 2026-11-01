@@ -172,7 +172,7 @@ async function runGeminiIntegrationTest() {
   const userPrompt = "Pay Netflix $15.49 on 5th, max $20.00";
   let tokenCount = 0;
   const stepsCaptured: string[] = [];
-  let receiptCaptured: (PayPalReceipt & Record<string, unknown>) | null = null;
+  let receiptCaptured: PayPalReceipt | Record<string, unknown> | null = null;
 
   const stream = geminiAgent.streamResponse(userPrompt, { strictMode: false });
 
@@ -192,10 +192,11 @@ async function runGeminiIntegrationTest() {
     `✅ Stream completed! Generated ${tokenCount} tokens and executed ${stepsCaptured.length} steps.`
   );
   if (receiptCaptured) {
+    const rec = receiptCaptured as Record<string, unknown>;
     console.log("✅ Autonomous Receipt generated:", {
-      orderId: receiptCaptured.orderId,
-      service: receiptCaptured.service,
-      status: receiptCaptured.status,
+      orderId: rec.orderId,
+      service: rec.service,
+      status: rec.status,
     });
   }
 

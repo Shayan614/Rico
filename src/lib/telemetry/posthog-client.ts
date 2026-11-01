@@ -1,10 +1,11 @@
 "use client";
 
-import posthog from "posthog-js";
+import type { PostHog } from "posthog-js";
 
+let posthogInstance: PostHog | null = null;
 let isPostHogInitialized = false;
 
-export function initPostHogClient() {
+export async function initPostHogClient() {
   if (typeof window === "undefined" || isPostHogInitialized) return;
 
   const apiKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
@@ -17,7 +18,9 @@ export function initPostHogClient() {
     !apiKey.includes("your_posthog_project_api_key")
   ) {
     try {
-      posthog.init(apiKey, {
+      const posthogModule = await import("posthog-js");
+      const ph = (posthogModule.default || posthogModule) as unknown as PostHog;
+      ph.init(apiKey, {
         api_host: apiHost,
         capture_pageview: true,
         capture_pageleave: true,
@@ -31,6 +34,7 @@ export function initPostHogClient() {
           }
         },
       });
+      posthogInstance = ph;
       isPostHogInitialized = true;
     } catch (err) {
       console.warn("Failed to initialize PostHog client:", err);
@@ -47,8 +51,8 @@ export function captureClientEvent(
 ) {
   if (typeof window === "undefined") return;
 
-  if (posthog.__loaded) {
-    posthog.capture(eventName, properties);
+  if (posthogInstance && (posthogInstance as unknown as { __loaded?: boolean }).__loaded) {
+    posthogInstance.capture(eventName, properties);
   } else if (process.env.NODE_ENV === "development") {
     console.log(`[PostHog Client Telemetry] ${eventName}`, properties || {});
   }
@@ -81,4 +85,19 @@ export function trackApprovalDecision(
   });
 }
 
-export { posthog };
+export const posthog = {
+  onFeatureFlags: (callback: () => void) => {
+    if (posthogInstance && typeof posthogInstance.onFeatureFlags === "function") {
+      posthogInstance.onFeatureFlags(callback);
+    }
+  },
+  isFeatureEnabled: (key: string): boolean => {
+    if (posthogInstance && typeof posthogInstance.isFeatureEnabled === "function") {
+      return Boolean(posthogInstance.isFeatureEnabled(key));
+    }
+    return false;
+  },
+  capture: (eventName: string, properties?: Record<string, unknown>) => {
+    captureClientEvent(eventName, properties);
+  },
+};

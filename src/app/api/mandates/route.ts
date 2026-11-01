@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { db, mandates } from "@/db";
 import { desc } from "drizzle-orm";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const list = db.select().from(mandates).orderBy(desc(mandates.createdAt)).all();

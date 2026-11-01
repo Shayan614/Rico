@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { priceSentinel, omnichannelAlertStore } from "@/lib/sentinel";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const stats = priceSentinel.getStats();
