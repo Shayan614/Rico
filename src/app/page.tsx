@@ -218,8 +218,7 @@ export default function Home() {
     },
   ]);
 
-  // Load persistent records from SQLite backend
-  useEffect(() => {
+  const fetchDashboardData = () => {
     fetch("/api/dashboard")
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load dashboard data");
@@ -239,6 +238,11 @@ export default function Home() {
       .catch((err) => {
         console.warn("Could not fetch database records, using defaults:", err);
       });
+  };
+
+  // Load persistent records from SQLite backend
+  useEffect(() => {
+    fetchDashboardData();
   }, []);
 
   // PostHog Feature Flag for Strict Approval Mode vs Autonomous Mode
@@ -640,6 +644,7 @@ export default function Home() {
               approvalRequest={approvalRequest}
               onApproveApproval={handleApprove}
               onRejectApproval={handleReject}
+              onRefreshData={fetchDashboardData}
             />
           }
         />
