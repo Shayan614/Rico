@@ -12,6 +12,7 @@ import {
   Table as TableIcon,
   Monitor,
   Bot,
+  Sparkles,
 } from "lucide-react";
 import { Mandate, Transaction, AuditLog } from "./FinancialDashboard";
 import { ReceiptData } from "./ReceiptDialog";
@@ -19,6 +20,7 @@ import { AgGridMandatesTable } from "./AgGridMandatesTable";
 import { AgGridTransactionsTable } from "./AgGridTransactionsTable";
 import { LiveBrowserViewport } from "./LiveBrowserViewport";
 import { PriceSentinelPanel } from "./PriceSentinelPanel";
+import { PersonaSavingsPanel } from "./PersonaSavingsPanel";
 import { ApprovalRequest } from "./ApprovalDialog";
 import { useTheme } from "next-themes";
 import { Badge } from "@/components/ui/badge";
@@ -51,7 +53,7 @@ export function WorkSurface({
   onRefreshData,
 }: WorkSurfaceProps) {
   const [activeTab, setActiveTab] = useState<
-    "viewport" | "sentinel" | "mandates" | "transactions" | "audit"
+    "viewport" | "savings" | "sentinel" | "mandates" | "transactions" | "audit"
   >("viewport");
 
   const { theme, resolvedTheme } = useTheme();
@@ -99,6 +101,22 @@ export function WorkSurface({
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
               </span>
             )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("savings")}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+              activeTab === "savings"
+                ? "bg-white dark:bg-neutral-800 text-emerald-600 dark:text-emerald-400 shadow-xs border border-emerald-500/30"
+                : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Savings &amp; Credits</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 text-[9px] font-mono font-bold">
+              $50k+
+            </span>
           </button>
 
           <button
@@ -260,6 +278,13 @@ export function WorkSurface({
             approvalRequest={approvalRequest}
             onApproveApproval={onApproveApproval}
             onRejectApproval={onRejectApproval}
+          />
+        )}
+
+        {activeTab === "savings" && (
+          <PersonaSavingsPanel
+            onDeployPlanMandate={onDeployPlanMandate}
+            onRefreshData={onRefreshData}
           />
         )}
 

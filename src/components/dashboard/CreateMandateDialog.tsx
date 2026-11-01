@@ -83,10 +83,30 @@ export function CreateMandateDialog({
               <Input
                 value={service}
                 onChange={(e) => setService(e.target.value)}
-                placeholder="e.g. Netflix, Spotify, AWS, GitHub"
+                placeholder="e.g. Netflix, Spotify, AWS, GitHub, PostHog, Notion"
                 className="bg-neutral-50 dark:bg-neutral-950 border-neutral-300 dark:border-neutral-800 text-xs text-neutral-900 dark:text-neutral-100"
                 required
               />
+              {service.toLowerCase().includes("posthog") && (
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium flex items-center gap-1">
+                  💡 <strong>Startup Perk:</strong> PostHog offers $50,000 in free credits!
+                </p>
+              )}
+              {service.toLowerCase().includes("spotify") && (
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium flex items-center gap-1">
+                  🎓 <strong>Student Perk:</strong> Spotify is 50% off ($5.99/mo + free Hulu)!
+                </p>
+              )}
+              {service.toLowerCase().includes("notion") && (
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium flex items-center gap-1">
+                  💡 <strong>Startup Perk:</strong> Notion provides $1,000 - $6,000 in credits!
+                </p>
+              )}
+              {service.toLowerCase().includes("adobe") && (
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium flex items-center gap-1">
+                  🎓 <strong>Student Perk:</strong> Adobe is 64% off ($19.99/mo student rate)!
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">

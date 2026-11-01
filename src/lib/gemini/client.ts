@@ -9,6 +9,7 @@ import {
 } from "./tool-executors";
 import { StreamEvent, ChatContext, ThoughtStep } from "./types";
 import { posthogServer } from "@/lib/telemetry/posthog-server";
+import { personaSavingsOptimizer } from "@/lib/savings";
 
 export class GeminiAgentClient {
   private client: GoogleGenAI | null = null;
@@ -167,6 +168,12 @@ export class GeminiAgentClient {
                   receipt: toolResult.receipt as Record<string, unknown>,
                 };
               }
+              if (toolResult.advisory) {
+                yield {
+                  type: "savings_advisory",
+                  advisory: toolResult.advisory as Record<string, unknown>,
+                };
+              }
               yield {
                 type: "step",
                 step: {
@@ -246,6 +253,21 @@ export class GeminiAgentClient {
       defaultPrice = 59.99;
       ceiling = 30.0; // Deliberate guardrail test
       schedule = "Monthly on 10th";
+    } else if (textLower.includes("posthog")) {
+      service = "PostHog";
+      defaultPrice = 120.0;
+      ceiling = 150.0;
+      schedule = "Monthly on 1st";
+    } else if (textLower.includes("notion")) {
+      service = "Notion";
+      defaultPrice = 10.0;
+      ceiling = 20.0;
+      schedule = "Monthly on 1st";
+    } else if (textLower.includes("chatgpt")) {
+      service = "ChatGPT Plus";
+      defaultPrice = 20.0;
+      ceiling = 25.0;
+      schedule = "Monthly on 1st";
     }
 
     // Try parsing user price or ceiling numbers from message
@@ -346,6 +368,25 @@ export class GeminiAgentClient {
     step2.status = "done";
     step2.detail = `Scraped live pricing: $${defaultPrice.toFixed(2)}/mo (${priceVerification.planName})`;
     yield { type: "step", step: step2 };
+
+    // Step 2.5: Pre-Payment Persona Savings Probe
+    const savingsProbe = await personaSavingsOptimizer.probePersonaSavings({
+      serviceName: service,
+      currentPrice: defaultPrice,
+    });
+
+    if (savingsProbe.hasDeals && savingsProbe.advisory) {
+      const savingsStep: ThoughtStep = {
+        step: "Persona Savings Intercept",
+        status: "done",
+        detail: savingsProbe.recommendation,
+      };
+      yield { type: "step", step: savingsStep };
+      yield {
+        type: "savings_advisory",
+        advisory: savingsProbe.advisory as unknown as Record<string, unknown>,
+      };
+    }
 
     // Step 3: Safety Guardrail check
     const step3: ThoughtStep = {

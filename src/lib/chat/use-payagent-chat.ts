@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from "react";
 import { ReceiptData } from "@/components/dashboard/ReceiptDialog";
 import { ApprovalRequest } from "@/components/dashboard/ApprovalDialog";
 import { Mandate } from "@/components/dashboard/FinancialDashboard";
+import type { SavingsAdvisoryData } from "@/lib/savings/types";
 
 export interface ExecutionStep {
   step: string;
@@ -29,6 +30,7 @@ export interface ChatMessage {
   thoughtProcess?: ThoughtProcess;
   statusPill?: StatusPill;
   receipt?: ReceiptData;
+  savingsAdvisory?: SavingsAdvisoryData;
 }
 
 export interface UsePayAgentChatOptions {
@@ -258,6 +260,18 @@ export function usePayAgentChat({
                 if (onReceiptCaptured) {
                   onReceiptCaptured(receiptData);
                 }
+              } else if (event.type === "savings_advisory" && event.advisory) {
+                const advData = event.advisory as SavingsAdvisoryData;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMsgId
+                      ? {
+                          ...m,
+                          savingsAdvisory: advData,
+                        }
+                      : m
+                  )
+                );
               } else if (event.type === "done" && event.text && !accumulatedText) {
                 accumulatedText = event.text;
                 setMessages((prev) =>

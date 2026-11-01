@@ -37,7 +37,15 @@ export interface ExecutePaymentToolParams {
 }
 
 export interface StreamEvent {
-  type: "token" | "step" | "thought" | "tool_call" | "receipt" | "done" | "error";
+  type:
+    | "token"
+    | "step"
+    | "thought"
+    | "tool_call"
+    | "receipt"
+    | "savings_advisory"
+    | "done"
+    | "error";
   text?: string;
   step?: ThoughtStep;
   thought?: ThoughtProcess;
@@ -46,6 +54,7 @@ export interface StreamEvent {
     args: Record<string, unknown>;
   };
   receipt?: PayPalReceipt | Record<string, unknown>;
+  advisory?: Record<string, unknown>;
   error?: string;
 }
 

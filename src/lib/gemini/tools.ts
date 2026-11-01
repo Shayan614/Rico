@@ -123,11 +123,36 @@ export const compareMultiServicePricesTool: FunctionDeclaration = {
   },
 };
 
+export const checkPersonaSavingsTool: FunctionDeclaration = {
+  name: "check_persona_savings",
+  description:
+    "Intercepts a planned payment or mandate to probe for eligible persona-based subsidies, including $50k PostHog and Notion startup credits, 50% Student Discounts (Spotify, Adobe, GitHub), active promo coupons, and annual billing arbitrage.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      service_name: {
+        type: Type.STRING,
+        description: "Merchant or subscription name (e.g. 'PostHog', 'Spotify', 'Notion', 'Adobe Creative Cloud', 'AWS').",
+      },
+      current_price: {
+        type: Type.NUMBER,
+        description: "The current or scraped subscription price to check for discounts.",
+      },
+      persona: {
+        type: Type.STRING,
+        description: "User profession or profile: 'STARTUP_FOUNDER' (claims SaaS startup credits), 'STUDENT' (claims 50% education discounts), or 'DEVELOPER_SMB' (claims coupons and annual arbitrage). Defaults to 'STARTUP_FOUNDER'.",
+      },
+    },
+    required: ["service_name", "current_price"],
+  },
+};
+
 export const payAgentTools = [
   {
     functionDeclarations: [
       createMandateTool,
       verifyWebPriceTool,
+      checkPersonaSavingsTool,
       compareMultiServicePricesTool,
       executePayPalPaymentTool,
     ],

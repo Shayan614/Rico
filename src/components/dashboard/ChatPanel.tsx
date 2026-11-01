@@ -18,6 +18,8 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { ReceiptData } from "./ReceiptDialog";
+import type { SavingsAdvisoryData } from "@/lib/savings/types";
+import { SavingsAdvisoryCard } from "./SavingsAdvisoryCard";
 
 export interface ChatMessage {
   id: string;
@@ -29,6 +31,7 @@ export interface ChatMessage {
     state: "loading" | "success" | "warning";
   };
   receipt?: ReceiptData;
+  savingsAdvisory?: SavingsAdvisoryData;
 }
 
 interface ChatPanelProps {
@@ -218,6 +221,11 @@ export function ChatPanel({
                       <span>View Full Sandbox Details</span>
                     </Button>
                   </div>
+                )}
+
+                {/* Generative UI Savings Advisory Card */}
+                {msg.savingsAdvisory && (
+                  <SavingsAdvisoryCard advisory={msg.savingsAdvisory} />
                 )}
 
                 <div className="text-[10px] text-slate-500 px-1">

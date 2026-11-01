@@ -1,6 +1,7 @@
 import { db, mandates, transactions, auditLogs, type MandateRecord } from "@/db";
 import { executeMandatePayment, type PayPalReceipt } from "@/lib/paypal";
 import { priceWorker } from "@/lib/browser";
+import { personaSavingsOptimizer } from "@/lib/savings";
 import { eq } from "drizzle-orm";
 import {
   MandateToolParams,
@@ -316,6 +317,14 @@ export async function dispatchAgentTool(
       return await executeCompareMultiServicePrices(
         args as unknown as { services: string[]; category?: string }
       );
+
+    case "check_persona_savings":
+      return (await personaSavingsOptimizer.probePersonaSavings({
+        serviceName: String(args.service_name || ""),
+        currentPrice: Number(args.current_price || 0),
+        persona: (args.persona as "STARTUP_FOUNDER" | "STUDENT" | "DEVELOPER_SMB") || undefined,
+        mandateId: args.mandate_id ? String(args.mandate_id) : undefined,
+      })) as unknown as Record<string, unknown>;
 
     case "execute_paypal_payment":
       return (await executePayPalPayment(
