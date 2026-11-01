@@ -18,12 +18,17 @@ export interface ApprovalRequest {
   budgetCeiling: number;
   reason: string;
   currency: string;
+  baselinePrice?: number;
+  spikePercentage?: number;
+  fundingRail?: "PAYPAL" | "VISA" | "MASTERCARD";
+  anomalyType?: "PRICE_SPIKE" | "STRICT_MODE" | "BUDGET_CEILING_EXCEEDED";
+  riskLevel?: "warning" | "danger" | "critical";
 }
 
 interface ApprovalDialogProps {
   request: ApprovalRequest | null;
   isOpen: boolean;
-  onApprove: () => void;
+  onApprove: (fundingSource?: "PAYPAL" | "BACKUP_CARD") => void;
   onReject: () => void;
 }
 
@@ -73,24 +78,34 @@ export function ApprovalDialog({
           </div>
         </div>
 
-        <DialogFooter className="sm:justify-between border-t border-neutral-200 dark:border-neutral-800 pt-3 flex gap-2">
+        <DialogFooter className="sm:justify-between border-t border-neutral-200 dark:border-neutral-800 pt-3 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={onReject}
             className="h-8 px-3 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-200 text-xs flex items-center gap-1.5 transition-colors"
           >
             <X className="w-3.5 h-3.5" />
-            <span>Reject</span>
+            <span>Decline &amp; Cancel</span>
           </button>
 
-          <button
-            type="button"
-            onClick={onApprove}
-            className="h-8 px-3.5 rounded bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 text-xs font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5"
-          >
-            <Check className="w-3.5 h-3.5" />
-            <span>Approve Execution</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onApprove("BACKUP_CARD")}
+              className="h-8 px-3 rounded bg-blue-600 text-white hover:bg-blue-500 text-xs font-medium transition-colors flex items-center gap-1.5"
+            >
+              <span>Route to Visa (•••• 4242)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onApprove("PAYPAL")}
+              className="h-8 px-3.5 rounded bg-emerald-600 text-white hover:bg-emerald-500 text-xs font-medium transition-colors flex items-center gap-1.5"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Approve (PayPal)</span>
+            </button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

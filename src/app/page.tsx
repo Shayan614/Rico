@@ -315,13 +315,16 @@ export default function Home() {
     sendMessage(`Execute mandate now for ${target.service}`);
   };
 
-  const handleApprove = () => {
+  const handleApprove = (fundingSource: "PAYPAL" | "BACKUP_CARD" = "PAYPAL") => {
     if (!approvalRequest) return;
     const req = approvalRequest;
     setApprovalRequest(null);
     trackApprovalDecision(req.service, true, req.detectedPrice);
 
-    const orderId = `ORD-APP-${Math.floor(10000000 + Math.random() * 90000000)}`;
+    const isBackupCard = fundingSource === "BACKUP_CARD";
+    const orderId = isBackupCard
+      ? `ORD-VAULT-${Math.floor(10000000 + Math.random() * 90000000)}`
+      : `ORD-APP-${Math.floor(10000000 + Math.random() * 90000000)}`;
     const authCode = `AUTH-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const newReceipt: ReceiptData = {
@@ -331,7 +334,9 @@ export default function Home() {
       verifiedPrice: req.detectedPrice,
       budgetCeiling: req.budgetCeiling,
       currency: req.currency || "USD",
-      paymentMethod: "PayPal Sandbox Wallet (Approved)",
+      paymentMethod: isBackupCard
+        ? "PayPal Vault: Visa Debit (•••• 4242)"
+        : "PayPal Sandbox Wallet (Approved)",
       status: "COMPLETED",
       timestamp: new Date().toLocaleString(),
       payerEmail: "sb-buyer2026@personal.example.com",
@@ -360,9 +365,13 @@ export default function Home() {
       }),
       eventType: "PAYMENT_CAPTURED",
       service: req.service,
-      details: `User manual approval granted for ${req.service} ($${req.detectedPrice.toFixed(
-        2
-      )}). Order ${orderId} captured via PayPal.`,
+      details: isBackupCard
+        ? `User approved routing payment of $${req.detectedPrice.toFixed(
+            2
+          )} for ${req.service} to Backup Card (Visa •••• 4242) via PayPal Vault Tokenization Bridge.`
+        : `User manual approval granted for ${req.service} ($${req.detectedPrice.toFixed(
+            2
+          )}). Order ${orderId} captured via PayPal.`,
       severity: "success",
     };
 
@@ -384,23 +393,27 @@ export default function Home() {
     const approvedMsg: ChatMessage = {
       id: `msg-app-${Date.now()}`,
       sender: "assistant",
-      text: `Manual approval confirmed for ${req.service}. Payment of $${req.detectedPrice.toFixed(
-        2
-      )} ${req.currency} successfully executed via PayPal.`,
+      text: isBackupCard
+        ? `Manual approval confirmed for **${req.service}**. Payment of **$${req.detectedPrice.toFixed(
+            2
+          )} ${req.currency}** successfully re-routed to your vaulted backup **Visa Debit (•••• 4242)** via PayPal Vault Bridge.`
+        : `Manual approval confirmed for **${req.service}**. Payment of **$${req.detectedPrice.toFixed(
+            2
+          )} ${req.currency}** successfully executed via PayPal Sandbox Wallet.`,
       timestamp: new Date().toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
       }),
       thoughtProcess: {
-        summary: "Manual Review Approved",
+        summary: isBackupCard ? "Approved via Backup Visa Vault" : "Manual Review Approved",
         steps: [
           {
-            step: "Human approval confirmed",
+            step: "Human decision confirmed",
             status: "done",
-            detail: `Authorized $${req.detectedPrice.toFixed(2)}`,
+            detail: isBackupCard ? "Re-routed to Visa •••• 4242" : "Authorized via PayPal Primary",
           },
           {
-            step: "Executed payment via PayPal",
+            step: "Executed payment transaction",
             status: "done",
             detail: `Order: ${orderId}`,
           },
@@ -609,6 +622,9 @@ export default function Home() {
                 setIsCreateOpen(true);
               }}
               onDeployPlanMandate={handleDeployPlanMandate}
+              approvalRequest={approvalRequest}
+              onApproveApproval={handleApprove}
+              onRejectApproval={handleReject}
             />
           }
         />

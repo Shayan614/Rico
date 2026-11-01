@@ -17,6 +17,7 @@ import { ReceiptData } from "./ReceiptDialog";
 import { AgGridMandatesTable } from "./AgGridMandatesTable";
 import { AgGridTransactionsTable } from "./AgGridTransactionsTable";
 import { LiveBrowserViewport } from "./LiveBrowserViewport";
+import { ApprovalRequest } from "./ApprovalDialog";
 import { useTheme } from "next-themes";
 import { Badge } from "@/components/ui/badge";
 
@@ -28,6 +29,9 @@ interface WorkSurfaceProps {
   onViewReceipt: (receipt: ReceiptData) => void;
   onCreateMandateClick: () => void;
   onDeployPlanMandate?: (service: string, price: number, planName: string) => void;
+  approvalRequest?: ApprovalRequest | null;
+  onApproveApproval?: (fundingSource?: "PAYPAL" | "BACKUP_CARD") => void;
+  onRejectApproval?: () => void;
 }
 
 export function WorkSurface({
@@ -38,6 +42,9 @@ export function WorkSurface({
   onViewReceipt,
   onCreateMandateClick,
   onDeployPlanMandate,
+  approvalRequest,
+  onApproveApproval,
+  onRejectApproval,
 }: WorkSurfaceProps) {
   const [activeTab, setActiveTab] = useState<
     "viewport" | "mandates" | "transactions" | "audit"
@@ -78,10 +85,16 @@ export function WorkSurface({
           >
             <Monitor className="w-3.5 h-3.5" />
             <span>Live Viewport</span>
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-            </span>
+            {approvalRequest ? (
+              <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-black text-[9px] font-bold font-mono animate-pulse">
+                Needs You
+              </span>
+            ) : (
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+            )}
           </button>
 
           <button
@@ -224,6 +237,9 @@ export function WorkSurface({
                 onDeployPlanMandate(service, price, planName);
               }
             }}
+            approvalRequest={approvalRequest}
+            onApproveApproval={onApproveApproval}
+            onRejectApproval={onRejectApproval}
           />
         )}
 

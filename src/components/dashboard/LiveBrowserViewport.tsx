@@ -18,12 +18,18 @@ import {
   Bot,
   TrendingDown,
   Check,
+  AlertTriangle,
 } from "lucide-react";
 import { ScreencastFrame, CursorEvent, HelperBotSession, ParallelVerificationResult, CalmPricingResult } from "@/lib/browser/types";
 import { CalmPricingLens } from "./CalmPricingLens";
+import { NeedsYouBanner } from "./NeedsYouBanner";
+import { ApprovalRequest } from "./ApprovalDialog";
 
 interface LiveBrowserViewportProps {
   onPlanSelected?: (service: string, price: number, planName: string) => void;
+  approvalRequest?: ApprovalRequest | null;
+  onApproveApproval?: (fundingSource?: "PAYPAL" | "BACKUP_CARD") => void;
+  onRejectApproval?: () => void;
   className?: string;
 }
 
@@ -40,6 +46,9 @@ const PRESET_MERCHANTS = [
 
 export function LiveBrowserViewport({
   onPlanSelected,
+  approvalRequest,
+  onApproveApproval,
+  onRejectApproval,
   className = "",
 }: LiveBrowserViewportProps) {
   const [currentFrame, setCurrentFrame] = useState<string | null>(null);
@@ -80,6 +89,10 @@ export function LiveBrowserViewport({
   const [isCalmLensActive, setIsCalmLensActive] = useState<boolean>(false);
   const [calmData, setCalmData] = useState<CalmPricingResult | null>(null);
   const [isSimplifying, setIsSimplifying] = useState<boolean>(false);
+
+  // Zephium "Needs You" Decision Banner State
+  const [simulatedApproval, setSimulatedApproval] = useState<ApprovalRequest | null>(null);
+  const activeApproval = approvalRequest || simulatedApproval;
 
   const [cdpLogs, setCdpLogs] = useState<string[]>([
     "[CDP Engine] Initialized DevTools protocol session",
@@ -301,6 +314,51 @@ export function LiveBrowserViewport({
     if (onPlanSelected) {
       onPlanSelected(service, price, planName);
     }
+  };
+
+  // Zephium "Needs You" Decision Banner Handlers
+  const handleApproveFromBanner = (
+    fundingSource: "PAYPAL" | "BACKUP_CARD" = "PAYPAL"
+  ) => {
+    setSimulatedApproval(null);
+    addLog(
+      `[Needs You] Decision confirmed: Approved payment via ${
+        fundingSource === "BACKUP_CARD"
+          ? "Backup Visa Debit (•••• 4242)"
+          : "PayPal Wallet"
+      }`
+    );
+    if (onApproveApproval) {
+      onApproveApproval(fundingSource);
+    }
+  };
+
+  const handleRejectFromBanner = () => {
+    setSimulatedApproval(null);
+    addLog("[Needs You] Decision confirmed: Payment rejected. Funds withheld.");
+    if (onRejectApproval) {
+      onRejectApproval();
+    }
+  };
+
+  const handleSimulateSpike = () => {
+    const req: ApprovalRequest = {
+      id: `sim-spike-${Date.now()}`,
+      service: "Netflix Standard HD",
+      detectedPrice: 19.99,
+      budgetCeiling: 16.0,
+      baselinePrice: 15.49,
+      spikePercentage: 29,
+      reason:
+        "Merchant raised price from $15.49 to $19.99 (+29.1% sudden spike). Exceeds 20% anomaly threshold.",
+      currency: "USD",
+      anomalyType: "PRICE_SPIKE",
+      riskLevel: "danger",
+    };
+    setSimulatedApproval(req);
+    addLog(
+      "[Guardrail Alert] Simulated price anomaly spike (+29.1%) triggered for demonstration."
+    );
   };
 
   // Navigate to merchant URL using Playwright worker
@@ -594,6 +652,17 @@ export function LiveBrowserViewport({
             <Sparkles className="w-3 h-3 text-purple-400" />
             <span>Compare Dev Tools</span>
           </button>
+
+          {/* Feature 5: Trigger Spike Anomaly Simulation */}
+          <button
+            type="button"
+            onClick={handleSimulateSpike}
+            className="px-2 py-0.5 rounded text-[11px] font-medium bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 border border-amber-500/40 flex items-center gap-1 transition-all"
+            title="Simulate +29% Price Spike Anomaly to trigger Zephium 'Needs You' Decision Gate"
+          >
+            <AlertTriangle className="w-3 h-3 text-amber-400 animate-pulse" />
+            <span>Simulate Spike Alert</span>
+          </button>
         </div>
       </div>
 
@@ -672,6 +741,16 @@ export function LiveBrowserViewport({
           </span>
         </div>
       </div>
+
+      {/* Feature 5: Zephium "Needs You" Human Approval & Takeover Banner */}
+      {activeApproval && (
+        <NeedsYouBanner
+          request={activeApproval}
+          onApprovePayPal={() => handleApproveFromBanner("PAYPAL")}
+          onApproveBackupCard={() => handleApproveFromBanner("BACKUP_CARD")}
+          onReject={handleRejectFromBanner}
+        />
+      )}
 
       {/* 4. Main Viewport Stage / Canvas Area */}
       <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden min-h-[320px]">
