@@ -10,6 +10,7 @@ import { Mandate, Transaction, AuditLog } from "@/components/dashboard/Financial
 import { ReceiptDialog, ReceiptData } from "@/components/dashboard/ReceiptDialog";
 import { ApprovalDialog, ApprovalRequest } from "@/components/dashboard/ApprovalDialog";
 import { CreateMandateDialog } from "@/components/dashboard/CreateMandateDialog";
+import { QuickCommandLauncher } from "@/components/dashboard/QuickCommandLauncher";
 import { usePayAgentChat, ChatMessage } from "@/lib/chat/use-payagent-chat";
 import {
   trackMandateTriggered,
@@ -78,6 +79,7 @@ export default function Home() {
   const [approvalRequest, setApprovalRequest] =
     useState<ApprovalRequest | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [mandateInitialData, setMandateInitialData] = useState<
     | {
         service?: string;
@@ -88,6 +90,18 @@ export default function Home() {
     | undefined
   >(undefined);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+
+  // Global Keyboard Shortcut: ⌘K / Ctrl+K Quick Command Launcher
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsCommandOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Mandates state
   const [mandates, setMandates] = useState<Mandate[]>([
@@ -589,6 +603,7 @@ export default function Home() {
         onToggleStrictMode={handleToggleStrictMode}
         mandatesCount={mandates.length}
         onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
+        onOpenCommandPalette={() => setIsCommandOpen(true)}
       />
 
       {/* Main Resizable Split View */}
@@ -667,6 +682,23 @@ export default function Home() {
         }}
         onCreate={handleCreateMandate}
         initialData={mandateInitialData}
+      />
+
+      {/* Feature 7: Quick Command Launcher (Ctrl+K / ⌘K) */}
+      <QuickCommandLauncher
+        isOpen={isCommandOpen}
+        onClose={() => setIsCommandOpen(false)}
+        mandates={mandates}
+        transactions={transactions}
+        auditLogs={auditLogs}
+        onSendMessage={sendMessage}
+        onOpenCreateMandate={() => {
+          setMandateInitialData(undefined);
+          setIsCreateOpen(true);
+        }}
+        onViewReceipt={handleOpenReceipt}
+        onToggleStrictMode={handleToggleStrictMode}
+        strictMode={strictMode}
       />
     </div>
   );

@@ -10,6 +10,7 @@ import {
   Layers,
   ShieldCheck,
   ShieldAlert,
+  Search,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ interface AppHeaderProps {
   onToggleDarkMode?: () => void;
   mandatesCount?: number;
   onOpenMobileDrawer?: () => void;
+  onOpenCommandPalette?: () => void;
 }
 
 export function AppHeader({
@@ -34,6 +36,7 @@ export function AppHeader({
   onToggleDarkMode,
   mandatesCount = 3,
   onOpenMobileDrawer,
+  onOpenCommandPalette,
 }: AppHeaderProps) {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -91,6 +94,22 @@ export function AppHeader({
             <span className="px-1.5 py-0.2 rounded-full bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 text-[10px] font-bold">
               {mandatesCount}
             </span>
+          </button>
+        )}
+
+        {/* Quick Command Launcher (Ctrl+K / ⌘K) Trigger */}
+        {onOpenCommandPalette && (
+          <button
+            type="button"
+            onClick={onOpenCommandPalette}
+            className="flex items-center gap-2 h-7 px-2.5 rounded-md border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors text-xs"
+            title="Open Quick Command Launcher (Ctrl+K / ⌘K)"
+          >
+            <Search className="w-3.5 h-3.5 text-neutral-500" />
+            <span className="hidden sm:inline font-medium">Command</span>
+            <kbd className="hidden sm:flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-neutral-200 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-[10px] font-mono text-neutral-500 dark:text-neutral-400">
+              <span>⌘K</span>
+            </kbd>
           </button>
         )}
 
