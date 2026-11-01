@@ -100,12 +100,37 @@ export const executePayPalPaymentTool: FunctionDeclaration = {
   },
 };
 
+export const compareMultiServicePricesTool: FunctionDeclaration = {
+  name: "compare_multi_service_prices",
+  description:
+    "Spawns parallel Playwright helper bots to concurrently verify and compare live pricing across multiple merchant websites simultaneously (e.g. comparing Netflix vs Spotify, or GitHub Copilot vs ChatGPT Plus). Returns side-by-side rates and best deal recommendations.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      services: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.STRING,
+        },
+        description: "List of merchant or subscription services to compare simultaneously.",
+      },
+      category: {
+        type: Type.STRING,
+        description: "Optional category preset: 'streaming', 'devtools', or 'cloud'.",
+      },
+    },
+    required: ["services"],
+  },
+};
+
 export const payAgentTools = [
   {
     functionDeclarations: [
       createMandateTool,
       verifyWebPriceTool,
+      compareMultiServicePricesTool,
       executePayPalPaymentTool,
     ],
   },
 ];
+

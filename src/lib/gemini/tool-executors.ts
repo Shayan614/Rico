@@ -262,6 +262,37 @@ export async function executePayPalPayment(params: ExecutePaymentToolParams): Pr
   };
 }
 
+export async function executeCompareMultiServicePrices(params: {
+  services: string[];
+  category?: string;
+}): Promise<Record<string, unknown>> {
+  const targets = (params.services || ["Netflix", "Spotify"]).map((s) => ({ service: s }));
+  const result = await priceWorker.executeParallelPriceVerification(targets);
+
+  await db.insert(auditLogs).values({
+    id: generateId("log"),
+    eventType: "PRICE_VERIFIED",
+    service: targets.map((t) => t.service).join(", "),
+    details: `Parallel Helper Bots checked ${result.bots.length} merchants simultaneously. Lowest price: ${
+      result.bestDeal ? `${result.bestDeal.service} ($${result.bestDeal.price.toFixed(2)})` : "Verified"
+    }.`,
+    severity: "info",
+    metadata: {
+      batchId: result.batchId,
+      botCount: result.bots.length,
+      bestDeal: result.bestDeal,
+      type: "PARALLEL_VERIFICATION",
+    },
+  });
+
+  return {
+    success: true,
+    comparison: result,
+    bestDeal: result.bestDeal,
+    summary: `Parallel Helper Bots verified ${result.bots.length} merchants simultaneously. Best rate: ${result.bestDeal?.service} at $${result.bestDeal?.price.toFixed(2)}/mo.`,
+  };
+}
+
 /**
  * Universal Tool Dispatcher
  * Dispatches agent function calls to the appropriate executor
@@ -281,6 +312,11 @@ export async function dispatchAgentTool(
         args as unknown as VerifyPriceToolParams
       )) as unknown as Record<string, unknown>;
 
+    case "compare_multi_service_prices":
+      return await executeCompareMultiServicePrices(
+        args as unknown as { services: string[]; category?: string }
+      );
+
     case "execute_paypal_payment":
       return (await executePayPalPayment(
         args as unknown as ExecutePaymentToolParams
@@ -290,3 +326,4 @@ export async function dispatchAgentTool(
       throw new Error(`Unknown agent tool: ${toolName}`);
   }
 }
+

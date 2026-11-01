@@ -66,3 +66,33 @@ export interface BrowserSessionStatus {
   lastExtractedPrice?: number;
 }
 
+export interface HelperBotSession {
+  id: string;
+  service: string;
+  url: string;
+  title: string;
+  status: "idle" | "navigating" | "evaluating" | "extracting" | "ready" | "error";
+  currentFrame?: string;
+  cursor?: CursorEvent;
+  extractedResult?: ScrapedPriceResult;
+  fps: number;
+  totalFrames: number;
+  startedAt: number;
+  finishedAt?: number;
+}
+
+export interface ParallelVerificationResult {
+  batchId: string;
+  startedAt: string;
+  completedAt: string;
+  bots: HelperBotSession[];
+  bestDeal?: {
+    service: string;
+    price: number;
+    currency: string;
+    planName: string;
+    savingsVsHighest: number;
+  };
+}
+
+

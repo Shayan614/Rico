@@ -77,13 +77,33 @@ async function runBrowserWorkerTest() {
     });
   }
 
+  // 5. Test Parallel Helper Bots Multi-Site Verification
+  console.log("\n[Test 5] Testing Parallel Helper Bots Concurrent Execution...");
+  const parallelTargets = [
+    { service: "Netflix Standard HD" },
+    { service: "Spotify Premium" },
+    { service: "GitHub Copilot" },
+  ];
+
+  const parallelResult = await priceWorker.executeParallelPriceVerification(parallelTargets);
+  console.log("   ✅ Parallel Helper Bots completed successfully:", {
+    batchId: parallelResult.batchId,
+    totalBots: parallelResult.bots.length,
+    bestDeal: parallelResult.bestDeal,
+  });
+
+  if (!parallelResult.bestDeal || parallelResult.bots.length < 3) {
+    throw new Error("Parallel helper verification failed to process all targets");
+  }
+
   // Clean up browser
   await priceWorker.close();
 
   console.log("\n==================================================");
-  console.log("🎉 All 4 Playwright Web Worker Tests PASSED!");
+  console.log("🎉 All 5 Playwright Web Worker Tests PASSED!");
   console.log("==================================================");
   process.exit(0);
+
 }
 
 runBrowserWorkerTest().catch((err) => {

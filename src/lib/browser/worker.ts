@@ -4,8 +4,11 @@ import {
   ScrapedPriceResult,
   BrowserScrapeOptions,
   MerchantPricingProfile,
+  ParallelVerificationResult,
+  HelperBotSession,
 } from "./types";
 import { screencastManager } from "./screencaster";
+
 
 
 export const KNOWN_MERCHANT_PROFILES: Record<string, MerchantPricingProfile> = {
@@ -312,6 +315,96 @@ export class PlaywrightPriceWorker {
       )}/mo)`,
     };
   }
+
+  /**
+   * Spawns parallel Playwright helper bots to verify multiple merchant pricing pages simultaneously
+   */
+  public async executeParallelPriceVerification(
+    targets: Array<{ service: string; url?: string }>
+  ): Promise<ParallelVerificationResult> {
+    const batchId = `batch-${Date.now()}`;
+    const startedAt = new Date().toISOString();
+
+    // 1. Register each helper bot in screencastManager
+    const botIds: string[] = [];
+    targets.forEach((target, index) => {
+      const id = `bot-${index + 1}-${target.service.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+      botIds.push(id);
+      screencastManager.registerBot(id, target.service, target.url || "https://example.com");
+    });
+
+    // 2. Concurrently execute worker scrapes
+    const promises = targets.map(async (target, index) => {
+      const botId = botIds[index];
+      screencastManager.updateBot(botId, { status: "navigating" });
+
+      try {
+        const scrapeResult = await this.scrapeMerchantPrice(target.service, target.url, {
+          timeoutMs: 8000,
+        });
+
+        screencastManager.updateBot(botId, {
+          status: "ready",
+          extractedResult: scrapeResult,
+          finishedAt: Date.now(),
+          title: `${scrapeResult.service} - $${scrapeResult.price.toFixed(2)}`,
+          cursor: {
+            x: 410,
+            y: 524,
+            action: "click",
+            label: `Bot #${index + 1}: Extracted ($${scrapeResult.price.toFixed(2)})`,
+            timestamp: Date.now(),
+          },
+        });
+
+        return scrapeResult;
+      } catch (err) {
+        screencastManager.updateBot(botId, {
+          status: "error",
+          finishedAt: Date.now(),
+        });
+        throw err;
+      }
+    });
+
+    const results = await Promise.allSettled(promises);
+    const validResults: ScrapedPriceResult[] = [];
+    results.forEach((res) => {
+      if (res.status === "fulfilled" && res.value) {
+        validResults.push(res.value);
+      }
+    });
+
+    // 3. Compute best deal & savings
+    let bestDeal: ParallelVerificationResult["bestDeal"] | undefined;
+    if (validResults.length > 0) {
+      const sorted = [...validResults].sort((a, b) => a.price - b.price);
+      const lowest = sorted[0];
+      const highest = sorted[sorted.length - 1];
+      const savingsVsHighest = Math.max(0, highest.price - lowest.price);
+
+      bestDeal = {
+        service: lowest.service,
+        price: lowest.price,
+        currency: lowest.currency,
+        planName: lowest.planName,
+        savingsVsHighest: Number(savingsVsHighest.toFixed(2)),
+      };
+    }
+
+    const completedBots = botIds
+      .map((id) => screencastManager.getBot(id))
+      .filter((b): b is HelperBotSession => !!b);
+
+    return {
+      batchId,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      bots: completedBots.length > 0 ? completedBots : screencastManager.getBots(),
+      bestDeal,
+    };
+  }
+
 
   /**
    * Scrapes synthetic HTML content directly (useful for local testing and deterministic fixtures)
