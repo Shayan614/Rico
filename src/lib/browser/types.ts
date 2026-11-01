@@ -125,4 +125,13 @@ export interface CalmPricingResult {
   analyzedAt: string;
 }
 
+export interface HumanTakeoverState {
+  isActive: boolean;
+  reason?: "CAPTCHA_CHALLENGE" | "CLOUDFLARE_TURNSTILE" | "TWO_FACTOR_SMS" | "MANUAL_TAKEOVER";
+  challengeTitle?: string;
+  challengeInstructions?: string;
+  isSolved?: boolean;
+  startedAt?: number;
+}
+
 

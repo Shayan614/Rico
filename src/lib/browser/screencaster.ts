@@ -4,6 +4,7 @@ import {
   CursorEvent,
   BrowserSessionStatus,
   HelperBotSession,
+  HumanTakeoverState,
 } from "./types";
 
 type FrameListener = (frame: ScreencastFrame) => void;
@@ -143,6 +144,10 @@ class ScreencastManager {
   // Parallel Helper Bots State
   private helperBots: Map<string, HelperBotSession> = new Map();
   private activeBotId: string = "bot-netflix";
+
+  // Live Human Takeover & Interactive Playwright Session
+  private activePage: Page | null = null;
+  private takeoverState: HumanTakeoverState = { isActive: false };
 
   constructor() {
     this.initDefaultBots();
@@ -543,6 +548,7 @@ class ScreencastManager {
     this.currentService = serviceName;
     this.status = "navigating";
     this.currentUrl = page.url() || this.currentUrl;
+    this.activePage = page;
 
     try {
       const cdp = await page.context().newCDPSession(page);
@@ -590,6 +596,7 @@ class ScreencastManager {
         } catch {
           // ignore
         }
+        this.activePage = null;
         this.status = "ready";
       };
     } catch (err) {
@@ -624,6 +631,67 @@ class ScreencastManager {
 
       await new Promise((resolve) => setTimeout(resolve, 35));
     }
+  }
+
+  /**
+   * Dispatches direct user click to live Chromium page via Playwright
+   */
+  public async handleHumanClick(x: number, y: number): Promise<void> {
+    if (this.activePage) {
+      try {
+        await this.activePage.mouse.click(x, y);
+      } catch {
+        // fallback if page closed
+      }
+    }
+    this.broadcastCursor({
+      x,
+      y,
+      action: "click",
+      label: `👤 Human Click (${Math.round(x)}, ${Math.round(y)})`,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Dispatches direct keystroke typing to live Chromium page
+   */
+  public async handleHumanType(text: string): Promise<void> {
+    if (this.activePage) {
+      try {
+        await this.activePage.keyboard.type(text);
+      } catch {
+        // fallback
+      }
+    }
+  }
+
+  /**
+   * Sets Human Takeover mode status
+   */
+  public setTakeoverState(state: HumanTakeoverState): void {
+    this.takeoverState = state;
+    if (state.isActive) {
+      this.broadcastCursor({
+        x: 640,
+        y: 360,
+        action: "move",
+        label: "👤 Human Takeover Engaged",
+        timestamp: Date.now(),
+      });
+    } else {
+      this.broadcastCursor({
+        x: 410,
+        y: 524,
+        action: "move",
+        label: "🤖 Rico Autonomous Agent Resumed",
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  public getTakeoverState(): HumanTakeoverState {
+    return this.takeoverState;
   }
 }
 

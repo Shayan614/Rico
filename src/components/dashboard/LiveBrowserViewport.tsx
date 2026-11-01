@@ -19,11 +19,16 @@ import {
   TrendingDown,
   Check,
   AlertTriangle,
+  User,
+  ShieldCheck,
+  Smartphone,
+  MousePointer,
 } from "lucide-react";
 import { ScreencastFrame, CursorEvent, HelperBotSession, ParallelVerificationResult, CalmPricingResult } from "@/lib/browser/types";
 import { CalmPricingLens } from "./CalmPricingLens";
 import { NeedsYouBanner } from "./NeedsYouBanner";
 import { ApprovalRequest } from "./ApprovalDialog";
+import { TakeoverChallengeModal } from "./TakeoverChallengeModal";
 
 interface LiveBrowserViewportProps {
   onPlanSelected?: (service: string, price: number, planName: string) => void;
@@ -93,6 +98,10 @@ export function LiveBrowserViewport({
   // Zephium "Needs You" Decision Banner State
   const [simulatedApproval, setSimulatedApproval] = useState<ApprovalRequest | null>(null);
   const activeApproval = approvalRequest || simulatedApproval;
+
+  // Feature 6: Zephium Live Human Takeover Mode State
+  const [isTakeoverActive, setIsTakeoverActive] = useState<boolean>(false);
+  const [activeChallenge, setActiveChallenge] = useState<"CLOUDFLARE_TURNSTILE" | "TWO_FACTOR_SMS" | null>(null);
 
   const [cdpLogs, setCdpLogs] = useState<string[]>([
     "[CDP Engine] Initialized DevTools protocol session",
@@ -361,6 +370,84 @@ export function LiveBrowserViewport({
     );
   };
 
+  // Feature 6: Human Takeover Mode Handlers
+  const toggleTakeoverMode = async () => {
+    const next = !isTakeoverActive;
+    setIsTakeoverActive(next);
+
+    addLog(
+      next
+        ? "[Human Takeover] User engaged live interactive control of Chromium canvas"
+        : "[Autonomous Mode] Control handed back to Rico AI agent"
+    );
+
+    try {
+      await fetch("/api/browser/interact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set_takeover",
+          isActive: next,
+          reason: "MANUAL_TAKEOVER",
+        }),
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleCanvasClick = async (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isTakeoverActive) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const scaleX = 1280 / rect.width;
+    const scaleY = 720 / rect.height;
+    const x = Math.round((e.clientX - rect.left) * scaleX);
+    const y = Math.round((e.clientY - rect.top) * scaleY);
+
+    setCursor({
+      x,
+      y,
+      action: "click",
+      label: `👤 Human Click (${x}, ${y})`,
+      timestamp: Date.now(),
+    });
+    setClickRipple({ x, y });
+    setTimeout(() => setClickRipple(null), 800);
+
+    addLog(`[Takeover Input] Dispatched human click to (${x}, ${y}) via Playwright`);
+
+    try {
+      await fetch("/api/browser/interact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "click", x, y }),
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleChallengeSolved = async () => {
+    setActiveChallenge(null);
+    setIsTakeoverActive(false);
+
+    addLog(
+      "[Takeover Resolved] Challenge verified by human! Resuming Rico autonomous checkout."
+    );
+
+    try {
+      await fetch("/api/browser/interact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "solve_challenge" }),
+      });
+    } catch {
+      // ignore
+    }
+  };
+
   // Navigate to merchant URL using Playwright worker
   const handleNavigate = async (url: string, serviceName?: string) => {
     setIsNavigating(true);
@@ -532,6 +619,28 @@ export function LiveBrowserViewport({
             </span>
           </button>
 
+          {/* Feature 6: Live Human Takeover Button */}
+          <button
+            type="button"
+            onClick={toggleTakeoverMode}
+            className={`px-2 py-0.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all border shadow-xs ${
+              isTakeoverActive
+                ? "bg-amber-500 text-black border-amber-400 ring-2 ring-amber-500/40 animate-pulse font-bold"
+                : "bg-neutral-800/90 hover:bg-neutral-700 text-amber-300 border-amber-500/40 hover:text-white"
+            }`}
+            title="Toggle Live Human Takeover Mode (Interactive fallback for CAPTCHA/2FA)"
+          >
+            <User className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline font-sans">Takeover</span>
+            <span
+              className={`text-[9px] px-1 py-0.2 rounded font-mono font-bold ${
+                isTakeoverActive ? "bg-black/80 text-amber-300" : "bg-neutral-900 text-neutral-400"
+              }`}
+            >
+              {isTakeoverActive ? "ENGAGED" : "MANUAL"}
+            </span>
+          </button>
+
           {/* Live 30FPS Screencast Badge */}
           <div
             className={`hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono border ${
@@ -661,7 +770,36 @@ export function LiveBrowserViewport({
             title="Simulate +29% Price Spike Anomaly to trigger Zephium 'Needs You' Decision Gate"
           >
             <AlertTriangle className="w-3 h-3 text-amber-400 animate-pulse" />
-            <span>Simulate Spike Alert</span>
+            <span>Spike Alert</span>
+          </button>
+
+          {/* Feature 6: Simulate CAPTCHA & 2FA Challenges */}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveChallenge("CLOUDFLARE_TURNSTILE");
+              setIsTakeoverActive(true);
+              addLog("[Simulation] Triggered Cloudflare Bot Check challenge for Human Takeover");
+            }}
+            className="px-2 py-0.5 rounded text-[11px] font-medium bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 border border-amber-500/40 flex items-center gap-1 transition-all"
+            title="Simulate Cloudflare CAPTCHA to demonstrate human intervention"
+          >
+            <ShieldCheck className="w-3 h-3 text-amber-400" />
+            <span>Test CAPTCHA</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveChallenge("TWO_FACTOR_SMS");
+              setIsTakeoverActive(true);
+              addLog("[Simulation] Triggered 2FA SMS challenge for Human Takeover");
+            }}
+            className="px-2 py-0.5 rounded text-[11px] font-medium bg-blue-950/60 hover:bg-blue-900/80 text-blue-300 border border-blue-500/40 flex items-center gap-1 transition-all"
+            title="Simulate 2FA SMS security verification"
+          >
+            <Smartphone className="w-3 h-3 text-blue-400" />
+            <span>Test 2FA</span>
           </button>
         </div>
       </div>
@@ -753,7 +891,49 @@ export function LiveBrowserViewport({
       )}
 
       {/* 4. Main Viewport Stage / Canvas Area */}
-      <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden min-h-[320px]">
+      <div
+        onClick={handleCanvasClick}
+        className={`relative flex-1 bg-black flex items-center justify-center overflow-hidden min-h-[320px] ${
+          isTakeoverActive ? "cursor-crosshair ring-2 ring-amber-500/50" : ""
+        }`}
+      >
+        {/* Live Human Takeover Floating Bar */}
+        {isTakeoverActive && (
+          <div className="absolute top-2 left-2 right-2 z-40 px-3 py-1.5 rounded-lg bg-amber-950/90 border border-amber-500/70 backdrop-blur-md flex items-center justify-between shadow-xl text-xs font-mono text-amber-200 animate-in slide-in-from-top-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+              <span className="font-bold text-white uppercase tracking-wider">
+                Human Takeover Engaged
+              </span>
+              <span className="hidden sm:inline text-neutral-300">
+                • Clicks sent directly to live Chromium
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={toggleTakeoverMode}
+              className="px-2.5 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-sans text-xs font-semibold flex items-center gap-1 shadow-sm transition-all"
+            >
+              <Bot className="w-3.5 h-3.5" />
+              <span>Hand Back to Rico</span>
+            </button>
+          </div>
+        )}
+
+        {/* Interactive CAPTCHA / 2FA Challenge Modal */}
+        {activeChallenge && (
+          <TakeoverChallengeModal
+            challengeType={activeChallenge}
+            serviceName={activeBot?.service || "Merchant Site"}
+            onSolved={handleChallengeSolved}
+            onCancel={() => {
+              setActiveChallenge(null);
+              setIsTakeoverActive(false);
+            }}
+          />
+        )}
+
         {/* Branch 1: Zephium Calm Pricing Lens Active View */}
         {isCalmLensActive ? (
           calmData ? (
@@ -846,8 +1026,13 @@ export function LiveBrowserViewport({
         )}
 
         {/* Live Status Overlay Pill (Top Right) */}
-        <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
-          {isCalmLensActive ? (
+        <div className="absolute top-3 right-3 z-30 flex items-center gap-2">
+          {isTakeoverActive ? (
+            <div className="bg-amber-500 text-black px-2.5 py-1 rounded-full text-[10px] font-mono font-bold shadow-lg flex items-center gap-1.5 animate-pulse">
+              <MousePointer className="w-3 h-3" />
+              <span>Human Takeover Active</span>
+            </div>
+          ) : isCalmLensActive ? (
             <div className="bg-purple-950/85 backdrop-blur-md px-2.5 py-1 rounded-full border border-purple-500/50 text-[10px] font-mono text-purple-300 font-bold shadow-lg flex items-center gap-1.5">
               <Sparkles className="w-3 h-3 text-purple-400 animate-pulse" />
               <span>Zephium Calm Lens Active</span>
