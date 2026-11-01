@@ -10,11 +10,13 @@ import {
   CheckCircle2,
   AlertCircle,
   Table as TableIcon,
+  Monitor,
 } from "lucide-react";
 import { Mandate, Transaction, AuditLog } from "./FinancialDashboard";
 import { ReceiptData } from "./ReceiptDialog";
 import { AgGridMandatesTable } from "./AgGridMandatesTable";
 import { AgGridTransactionsTable } from "./AgGridTransactionsTable";
+import { LiveBrowserViewport } from "./LiveBrowserViewport";
 import { useTheme } from "next-themes";
 import { Badge } from "@/components/ui/badge";
 
@@ -25,6 +27,7 @@ interface WorkSurfaceProps {
   onTriggerMandate: (id: string) => void;
   onViewReceipt: (receipt: ReceiptData) => void;
   onCreateMandateClick: () => void;
+  onDeployPlanMandate?: (service: string, price: number, planName: string) => void;
 }
 
 export function WorkSurface({
@@ -34,10 +37,12 @@ export function WorkSurface({
   onTriggerMandate,
   onViewReceipt,
   onCreateMandateClick,
+  onDeployPlanMandate,
 }: WorkSurfaceProps) {
   const [activeTab, setActiveTab] = useState<
-    "mandates" | "transactions" | "audit"
-  >("mandates");
+    "viewport" | "mandates" | "transactions" | "audit"
+  >("viewport");
+
   const { theme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -62,6 +67,23 @@ export function WorkSurface({
       {/* Top Tab Bar & Actions */}
       <div className="h-11 px-4 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/40 flex items-center justify-between select-none shrink-0">
         <div className="flex items-center space-x-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab("viewport")}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+              activeTab === "viewport"
+                ? "bg-white dark:bg-neutral-800 text-blue-600 dark:text-blue-400 shadow-xs border border-blue-500/30"
+                : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+            }`}
+          >
+            <Monitor className="w-3.5 h-3.5" />
+            <span>Live Viewport</span>
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+          </button>
+
           <button
             type="button"
             onClick={() => setActiveTab("mandates")}
@@ -195,6 +217,16 @@ export function WorkSurface({
 
       {/* Main Grid Content Area */}
       <div className="flex-1 overflow-hidden p-3">
+        {activeTab === "viewport" && (
+          <LiveBrowserViewport
+            onPlanSelected={(service, price, planName) => {
+              if (onDeployPlanMandate) {
+                onDeployPlanMandate(service, price, planName);
+              }
+            }}
+          />
+        )}
+
         {activeTab === "mandates" && (
           <AgGridMandatesTable
             mandates={mandates}

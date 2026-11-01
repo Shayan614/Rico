@@ -5,6 +5,8 @@ import {
   BrowserScrapeOptions,
   MerchantPricingProfile,
 } from "./types";
+import { screencastManager } from "./screencaster";
+
 
 export const KNOWN_MERCHANT_PROFILES: Record<string, MerchantPricingProfile> = {
   netflix: {
@@ -196,14 +198,18 @@ export class PlaywrightPriceWorker {
     const timeoutMs = options?.timeoutMs || 8000;
 
     let context: BrowserContext | null = null;
+    let cleanupCdp: (() => Promise<void>) | null = null;
     try {
       context = await this.createIsolatedContext();
       const page = await context.newPage();
 
-      // Block non-essential heavy resources (images, fonts, media) for fast execution
+      screencastManager.broadcastStatus("navigating", targetUrl, profile.name);
+      cleanupCdp = await screencastManager.attachToPage(page, profile.name);
+
+      // Block heavy media/font downloads for fast execution while retaining layout/styling
       await page.route("**/*", (route) => {
         const resourceType = route.request().resourceType();
-        if (["image", "media", "font"].includes(resourceType)) {
+        if (["media", "font"].includes(resourceType)) {
           route.abort();
         } else {
           route.continue();
@@ -216,6 +222,8 @@ export class PlaywrightPriceWorker {
         timeout: timeoutMs,
       });
 
+      screencastManager.broadcastStatus("evaluating", targetUrl, profile.name);
+
       if (response && response.status() < 400) {
         // Query candidate pricing elements
         for (const selector of profile.priceSelectors) {
@@ -225,6 +233,25 @@ export class PlaywrightPriceWorker {
               const text = await el.innerText();
               const extracted = extractPriceFromText(text);
               if (extracted && extracted.price > 0) {
+                // Animate AI Cursor to selected pricing element
+                try {
+                  const box = await el.boundingBox();
+                  if (box) {
+                    const targetX = Math.round(box.x + box.width / 2);
+                    const targetY = Math.round(box.y + box.height / 2);
+                    await screencastManager.simulateCursorAction(
+                      targetX,
+                      targetY,
+                      "click",
+                      `Locked Target: ${profile.planName} ($${extracted.price.toFixed(2)}/mo)`
+                    );
+                  }
+                } catch {
+                  // ignore cursor simulation errors
+                }
+
+                screencastManager.broadcastStatus("extracting", targetUrl, profile.name);
+                if (cleanupCdp) await cleanupCdp();
                 await context.close();
                 return {
                   service: profile.name,
@@ -246,8 +273,16 @@ export class PlaywrightPriceWorker {
         }
       }
 
+      if (cleanupCdp) await cleanupCdp();
       await context.close();
     } catch (browserErr) {
+      if (cleanupCdp) {
+        try {
+          await cleanupCdp();
+        } catch {
+          // ignore
+        }
+      }
       console.warn(
         `[PlaywrightWorker] Live scraping encountered an error for ${serviceName}, using verified baseline profile:`,
         browserErr instanceof Error ? browserErr.message : String(browserErr)
