@@ -2,12 +2,13 @@ export * from "./types";
 export * from "./oauth";
 export * from "./orders";
 export * from "./mcp-client";
+export * from "./vault";
 
 import { payPalOrders } from "./orders";
-import { PayPalReceipt } from "./types";
+import { PayPalReceipt, FundingRail } from "./types";
 
 /**
- * High-level helper to execute an autonomous payment mandate
+ * High-level helper to execute an autonomous payment mandate via Dual-Rail Rails
  */
 export async function executeMandatePayment(params: {
   serviceName: string;
@@ -15,6 +16,8 @@ export async function executeMandatePayment(params: {
   budgetCeiling: number;
   currency?: string;
   mandateId?: string;
+  fundingRail?: FundingRail | "AUTO";
+  simulateDeclinePrimary?: boolean;
 }): Promise<{
   success: boolean;
   orderId: string;
@@ -36,13 +39,16 @@ export async function executeMandatePayment(params: {
     currency: params.currency || "USD",
     serviceName: params.serviceName,
     mandateId: params.mandateId,
+    fundingRail: params.fundingRail || "AUTO",
   });
 
-  // 2. Capture Order
+  // 2. Capture Order with Dual-Rail Vault routing
   const { capture, receipt } = await payPalOrders.captureOrder(order.id, {
     serviceName: params.serviceName,
     verifiedPrice: params.verifiedPrice,
     budgetCeiling: params.budgetCeiling,
+    fundingRail: params.fundingRail || "AUTO",
+    simulateDeclinePrimary: params.simulateDeclinePrimary,
   });
 
   return {

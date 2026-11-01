@@ -13,6 +13,10 @@ export interface ReceiptData {
   timestamp: string;
   payerEmail: string;
   sandboxAuthCode: string;
+  fundingRail?: "PAYPAL" | "VISA" | "MASTERCARD";
+  cardLastFour?: string;
+  routedGateway?: string;
+  isCascaded?: boolean;
 }
 
 // 1. Mandates Table

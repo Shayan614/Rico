@@ -4,7 +4,9 @@ import {
   PayPalOrderResponse,
   PayPalCaptureResponse,
   PayPalReceipt,
+  FundingRail,
 } from "./types";
+import { resolveFundingRail } from "./vault";
 
 export class PayPalOrdersClient {
   /**
@@ -96,7 +98,7 @@ export class PayPalOrdersClient {
   }
 
   /**
-   * Capture authorized funds for an Order (PayPal Orders v2 Capture)
+   * Capture authorized funds for an Order (PayPal Orders v2 Capture & Dual-Rail Vault)
    */
   public async captureOrder(
     orderId: string,
@@ -105,10 +107,18 @@ export class PayPalOrdersClient {
       planName?: string;
       verifiedPrice?: number;
       budgetCeiling?: number;
+      fundingRail?: FundingRail | "AUTO";
+      simulateDeclinePrimary?: boolean;
     }
   ): Promise<{ capture: PayPalCaptureResponse; receipt: PayPalReceipt }> {
     const token = await payPalOAuth.getAccessToken();
     const isLive = payPalOAuth.isLiveCredentialsConfigured();
+
+    const railResolution = resolveFundingRail(context?.fundingRail || "AUTO", {
+      simulateDeclinePrimary: context?.simulateDeclinePrimary,
+    });
+    const instrument = railResolution.instrument;
+    const resolvedRail = railResolution.selectedRail;
 
     if (isLive && !orderId.startsWith("ORD-SANDBOX-")) {
       try {
@@ -149,6 +159,9 @@ export class PayPalOrdersClient {
               1000 + Math.random() * 9000
             )}`,
             create_time: new Date().toISOString(),
+            fundingRail: resolvedRail,
+            cardLastFour: instrument.lastFour,
+            routedGateway: instrument.issuerName,
           };
 
           const receipt: PayPalReceipt = {
@@ -161,7 +174,10 @@ export class PayPalOrdersClient {
             verifiedPrice: context?.verifiedPrice ?? parseFloat(amountValue),
             budgetCeiling: context?.budgetCeiling ?? parseFloat(amountValue),
             currency,
-            paymentMethod: "PayPal Sandbox Wallet (Linked Account)",
+            paymentMethod:
+              resolvedRail === "PAYPAL"
+                ? "PayPal Sandbox Wallet (Primary Account)"
+                : `${instrument.label} (•••• ${instrument.lastFour})`,
             status: "COMPLETED",
             timestamp: new Date().toLocaleTimeString([], {
               hour: "2-digit",
@@ -170,6 +186,10 @@ export class PayPalOrdersClient {
             payerEmail: capture.payer.email_address,
             sandboxAuthCode: capture.authorizationCode,
             mode: "LIVE_SANDBOX",
+            fundingRail: resolvedRail,
+            cardLastFour: instrument.lastFour,
+            routedGateway: instrument.issuerName,
+            isCascaded: railResolution.isCascaded,
           };
 
           return { capture, receipt };
@@ -182,7 +202,7 @@ export class PayPalOrdersClient {
       }
     }
 
-    // High-Fidelity Sandbox Simulator Capture
+    // High-Fidelity Sandbox Simulator Capture with Dual-Rail Support
     const randomCap = Math.floor(10000000 + Math.random() * 90000000);
     const captureId = `CAP-${randomCap}`;
     const authCode = `AUTH-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -205,6 +225,9 @@ export class PayPalOrdersClient {
       transactionId: captureId,
       authorizationCode: authCode,
       create_time: new Date().toISOString(),
+      fundingRail: resolvedRail,
+      cardLastFour: instrument.lastFour,
+      routedGateway: instrument.issuerName,
     };
 
     const receipt: PayPalReceipt = {
@@ -215,7 +238,10 @@ export class PayPalOrdersClient {
       verifiedPrice,
       budgetCeiling,
       currency: "USD",
-      paymentMethod: "PayPal Sandbox Wallet (Connected Account)",
+      paymentMethod:
+        resolvedRail === "PAYPAL"
+          ? "PayPal Sandbox Wallet (Connected Account)"
+          : `${instrument.label} (•••• ${instrument.lastFour})`,
       status: "COMPLETED",
       timestamp: new Date().toLocaleTimeString([], {
         hour: "2-digit",
@@ -224,6 +250,10 @@ export class PayPalOrdersClient {
       payerEmail: "buyer-sandbox@payagent.internal",
       sandboxAuthCode: authCode,
       mode: isLive ? "LIVE_SANDBOX" : "SIMULATED_SANDBOX",
+      fundingRail: resolvedRail,
+      cardLastFour: instrument.lastFour,
+      routedGateway: instrument.issuerName,
+      isCascaded: railResolution.isCascaded,
     };
 
     return { capture, receipt };

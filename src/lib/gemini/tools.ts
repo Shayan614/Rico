@@ -83,6 +83,10 @@ export const executePayPalPaymentTool: FunctionDeclaration = {
         type: Type.STRING,
         description: "Optional ID of the registered mandate associated with this payment.",
       },
+      funding_rail: {
+        type: Type.STRING,
+        description: "Dual-rail payment funding route: 'PAYPAL' (Primary PayPal digital wallet), 'VISA' (Backup Vaulted Visa Signature), 'MASTERCARD' (Backup Vaulted Mastercard World Elite), or 'AUTO' (Smart cascading from PayPal with automatic card fallback). Defaults to 'AUTO'.",
+      },
       recipient_email: {
         type: Type.STRING,
         description: "Optional recipient email address or merchant identifier.",

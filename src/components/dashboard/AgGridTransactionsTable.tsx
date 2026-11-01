@@ -170,6 +170,64 @@ export function AgGridTransactionsTable({
     []
   );
 
+  // Funding Rail Cell Renderer
+  const RailCellRenderer = useCallback(
+    (params: ICellRendererParams<Transaction>) => {
+      if (!params.data) return null;
+      const rail = params.data.receiptData?.fundingRail || "PAYPAL";
+      const lastFour = params.data.receiptData?.cardLastFour;
+      const isCascaded = params.data.receiptData?.isCascaded;
+
+      if (rail === "VISA") {
+        return (
+          <div className="flex items-center gap-1 h-full">
+            <Badge
+              variant="outline"
+              className="border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400 text-[10px] font-bold px-1.5 py-0.5"
+            >
+              VISA {lastFour ? `•••• ${lastFour}` : ""}
+            </Badge>
+            {isCascaded && (
+              <span className="text-[9px] text-purple-600 font-mono" title="Auto-cascaded from primary PayPal">
+                ↻
+              </span>
+            )}
+          </div>
+        );
+      }
+
+      if (rail === "MASTERCARD") {
+        return (
+          <div className="flex items-center gap-1 h-full">
+            <Badge
+              variant="outline"
+              className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[10px] font-bold px-1.5 py-0.5"
+            >
+              MC {lastFour ? `•••• ${lastFour}` : ""}
+            </Badge>
+            {isCascaded && (
+              <span className="text-[9px] text-purple-600 font-mono" title="Auto-cascaded from primary PayPal">
+                ↻
+              </span>
+            )}
+          </div>
+        );
+      }
+
+      return (
+        <div className="flex items-center h-full">
+          <Badge
+            variant="outline"
+            className="border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400 text-[10px] font-bold px-1.5 py-0.5"
+          >
+            PAYPAL
+          </Badge>
+        </div>
+      );
+    },
+    []
+  );
+
   // Actions Cell Renderer
   const ActionsCellRenderer = useCallback(
     (params: ICellRendererParams<Transaction>) => {
@@ -222,6 +280,13 @@ export function AgGridTransactionsTable({
         comparator: (a, b) => a - b,
       },
       {
+        headerName: "Rail",
+        cellRenderer: RailCellRenderer,
+        flex: 1.2,
+        minWidth: 120,
+        sortable: false,
+      },
+      {
         field: "timestamp",
         headerName: "Execution Time",
         flex: 1.5,
@@ -251,6 +316,7 @@ export function AgGridTransactionsTable({
     OrderIdCellRenderer,
     ServiceCellRenderer,
     AmountCellRenderer,
+    RailCellRenderer,
     StatusCellRenderer,
     ActionsCellRenderer,
   ]);

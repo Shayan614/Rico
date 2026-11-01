@@ -9,6 +9,7 @@ import {
   dispatchAgentTool,
 } from "./index";
 import { priceWorker } from "@/lib/browser";
+import type { PayPalReceipt } from "@/lib/paypal";
 
 async function runGeminiIntegrationTest() {
   console.log("==================================================");
@@ -171,7 +172,7 @@ async function runGeminiIntegrationTest() {
   const userPrompt = "Pay Netflix $15.49 on 5th, max $20.00";
   let tokenCount = 0;
   const stepsCaptured: string[] = [];
-  let receiptCaptured: Record<string, unknown> | null = null;
+  let receiptCaptured: (PayPalReceipt & Record<string, unknown>) | null = null;
 
   const stream = geminiAgent.streamResponse(userPrompt, { strictMode: false });
 

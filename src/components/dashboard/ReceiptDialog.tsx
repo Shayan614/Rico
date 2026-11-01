@@ -30,6 +30,10 @@ export interface ReceiptData {
   timestamp: string;
   payerEmail: string;
   sandboxAuthCode: string;
+  fundingRail?: "PAYPAL" | "VISA" | "MASTERCARD";
+  cardLastFour?: string;
+  routedGateway?: string;
+  isCascaded?: boolean;
 }
 
 interface ReceiptDialogProps {
@@ -153,6 +157,29 @@ Status: 100% VERIFIED & CAPTURED ON PAYPAL SANDBOX
                 </span>
               </div>
             )}
+            <div className="flex justify-between items-center text-neutral-500 pt-1 border-t border-neutral-200/60 dark:border-neutral-800/60">
+              <span>Payment Rail</span>
+              <span className="font-sans font-medium flex items-center gap-1.5">
+                {receipt.fundingRail === "VISA" ? (
+                  <Badge variant="outline" className="border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-bold px-1.5 py-0.5">
+                    VISA (•••• {receipt.cardLastFour || "4242"})
+                  </Badge>
+                ) : receipt.fundingRail === "MASTERCARD" ? (
+                  <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold px-1.5 py-0.5">
+                    MASTERCARD (•••• {receipt.cardLastFour || "4444"})
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold px-1.5 py-0.5">
+                    PAYPAL PRIMARY
+                  </Badge>
+                )}
+                {receipt.isCascaded && (
+                  <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">
+                    (Auto-Cascaded)
+                  </span>
+                )}
+              </span>
+            </div>
           </div>
 
           {/* Sandbox Meta */}

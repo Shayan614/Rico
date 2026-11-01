@@ -120,7 +120,16 @@ export function WorkSurface({
         <div className="flex items-center gap-2">
           <Badge
             variant="outline"
-            className="hidden sm:inline-flex text-[9px] py-0 px-1.5 border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300 font-mono items-center gap-1"
+            className="hidden sm:inline-flex text-[9px] py-0.5 px-2 border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-mono items-center gap-1.5"
+            title="Dual-Rail: Primary PayPal Wallet with Vaulted Visa & Mastercard Auto-Cascade"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Dual-Rail: PayPal + Visa/MC Vault
+          </Badge>
+
+          <Badge
+            variant="outline"
+            className="hidden md:inline-flex text-[9px] py-0 px-1.5 border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300 font-mono items-center gap-1"
           >
             <TableIcon className="w-2.5 h-2.5" />
             AG Grid UI Active

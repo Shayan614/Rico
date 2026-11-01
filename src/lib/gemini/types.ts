@@ -31,6 +31,7 @@ export interface ExecutePaymentToolParams {
   service_name: string;
   verified_price: number;
   budget_ceiling: number;
+  funding_rail?: "PAYPAL" | "VISA" | "MASTERCARD" | "AUTO";
   recipient_email?: string;
   description?: string;
 }

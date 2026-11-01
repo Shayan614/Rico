@@ -97,17 +97,43 @@ Status: 100% VERIFIED & CAPTURED ON PAYPAL SANDBOX
             <Receipt className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <span className="font-semibold text-neutral-900 dark:text-neutral-100 text-sm">
                 Digital Payment Receipt
               </span>
-              <Badge
-                variant="outline"
-                className="text-[9px] py-0 px-1.5 border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-mono flex items-center gap-1"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                PayPal Sandbox MCP
-              </Badge>
+              {receipt.fundingRail === "VISA" ? (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] py-0 px-1.5 border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400 font-mono flex items-center gap-1"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                  Visa Vault (•••• {receipt.cardLastFour || "4242"})
+                </Badge>
+              ) : receipt.fundingRail === "MASTERCARD" ? (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] py-0 px-1.5 border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-mono flex items-center gap-1"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  Mastercard Vault (•••• {receipt.cardLastFour || "4444"})
+                </Badge>
+              ) : (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] py-0 px-1.5 border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-mono flex items-center gap-1"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  PayPal Primary
+                </Badge>
+              )}
+              {receipt.isCascaded && (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] py-0 px-1.5 border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-400 font-mono"
+                >
+                  Auto-Cascaded
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-1.5 text-[11px] text-neutral-500 font-mono mt-0.5">
               <span>Order: {receipt.orderId}</span>

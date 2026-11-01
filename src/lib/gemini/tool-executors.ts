@@ -188,13 +188,14 @@ export async function executePayPalPayment(params: ExecutePaymentToolParams): Pr
     throw new Error(blockedMsg);
   }
 
-  // 2. Execute via PayPal SDK / Orders API
+  // 2. Execute via PayPal SDK / Orders API with Dual-Rail support
   const { orderId, captureId, receipt } = await executeMandatePayment({
     serviceName: params.service_name,
     verifiedPrice: params.verified_price,
     budgetCeiling: params.budget_ceiling,
     currency: "USD",
     mandateId: params.mandate_id,
+    fundingRail: params.funding_rail || "AUTO",
   });
 
   // 3. Persist transaction to SQLite
@@ -221,6 +222,13 @@ export async function executePayPalPayment(params: ExecutePaymentToolParams): Pr
   }
 
   // 5. Record successful payment audit log
+  const railLabel =
+    receipt.fundingRail === "VISA"
+      ? `Visa Vault (•••• ${receipt.cardLastFour || "4242"})`
+      : receipt.fundingRail === "MASTERCARD"
+      ? `Mastercard Vault (•••• ${receipt.cardLastFour || "4444"})`
+      : "PayPal Primary";
+
   await db.insert(auditLogs).values({
     id: generateId("log"),
     mandateId: params.mandate_id,
@@ -228,7 +236,7 @@ export async function executePayPalPayment(params: ExecutePaymentToolParams): Pr
     service: params.service_name,
     details: `Captured order ${orderId} for ${params.service_name}: $${params.verified_price.toFixed(
       2
-    )} USD. Verified below $${params.budget_ceiling.toFixed(2)} ceiling.`,
+    )} USD via ${railLabel}. Verified below $${params.budget_ceiling.toFixed(2)} ceiling.`,
     severity: "success",
     metadata: {
       orderId,
@@ -236,6 +244,10 @@ export async function executePayPalPayment(params: ExecutePaymentToolParams): Pr
       authCode: receipt.sandboxAuthCode,
       verifiedPrice: params.verified_price,
       budgetCeiling: params.budget_ceiling,
+      fundingRail: receipt.fundingRail,
+      cardLastFour: receipt.cardLastFour,
+      routedGateway: receipt.routedGateway,
+      isCascaded: receipt.isCascaded,
     },
   });
 
@@ -246,7 +258,7 @@ export async function executePayPalPayment(params: ExecutePaymentToolParams): Pr
     receipt,
     message: `Payment of $${params.verified_price.toFixed(2)} captured for ${
       params.service_name
-    } (Order: ${orderId}).`,
+    } via ${railLabel} (Order: ${orderId}).`,
   };
 }
 

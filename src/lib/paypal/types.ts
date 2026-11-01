@@ -1,3 +1,5 @@
+export type FundingRail = "PAYPAL" | "VISA" | "MASTERCARD";
+
 export interface PayPalOAuthToken {
   access_token: string;
   token_type: string;
@@ -15,6 +17,7 @@ export interface PayPalCreateOrderParams {
   mandateId?: string;
   description?: string;
   customId?: string;
+  fundingRail?: FundingRail | "AUTO";
 }
 
 export interface PayPalOrderResponse {
@@ -69,6 +72,9 @@ export interface PayPalCaptureResponse {
   transactionId: string;
   authorizationCode: string;
   create_time: string;
+  fundingRail: FundingRail;
+  cardLastFour?: string;
+  routedGateway?: string;
 }
 
 export interface PayPalReceipt {
@@ -85,4 +91,8 @@ export interface PayPalReceipt {
   payerEmail: string;
   sandboxAuthCode: string;
   mode: "LIVE_SANDBOX" | "SIMULATED_SANDBOX";
+  fundingRail: FundingRail;
+  cardLastFour?: string;
+  routedGateway?: string;
+  isCascaded?: boolean;
 }
