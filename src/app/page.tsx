@@ -78,6 +78,15 @@ export default function Home() {
   const [approvalRequest, setApprovalRequest] =
     useState<ApprovalRequest | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [mandateInitialData, setMandateInitialData] = useState<
+    | {
+        service?: string;
+        budgetCeiling?: string;
+        recurrence?: string;
+        category?: string;
+      }
+    | undefined
+  >(undefined);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
 
   // Mandates state
@@ -456,6 +465,54 @@ export default function Home() {
     setMessages((prev) => [...prev, rejectedMsg]);
   };
 
+  const handleDeployPlanMandate = (
+    service: string,
+    price: number,
+    planName: string
+  ) => {
+    const ceilingBuffer = (Math.ceil(price * 1.15 * 100) / 100).toFixed(2);
+    setMandateInitialData({
+      service: `${service} (${planName})`,
+      budgetCeiling: ceilingBuffer,
+      recurrence: "Monthly on the 1st",
+      category: "Software & Cloud",
+    });
+    setIsCreateOpen(true);
+
+    const planNoticeMsg: ChatMessage = {
+      id: `msg-plan-${Date.now()}`,
+      sender: "assistant",
+      text: `Locked in **${service} — ${planName}** via the **Zephium Calm Pricing Lens** at an honest transparent rate of **$${price.toFixed(
+        2
+      )}/mo** (dark patterns stripped).\n\nConfiguring autonomous mandate with a safe budget ceiling of **$${ceilingBuffer} USD**.`,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      thoughtProcess: {
+        summary: "Calm Pricing Lens Plan Selected",
+        steps: [
+          {
+            step: "DOM restyling completed",
+            status: "done",
+            detail: "Marketing traps & gotchas eliminated",
+          },
+          {
+            step: "Price normalized",
+            status: "done",
+            detail: `$${price.toFixed(2)} / month honest rate`,
+          },
+          {
+            step: "Mandate pre-staged",
+            status: "done",
+            detail: `Budget ceiling: $${ceilingBuffer} USD`,
+          },
+        ],
+      },
+    };
+    setMessages((prev) => [...prev, planNoticeMsg]);
+  };
+
   const handleCreateMandate = (
     newMandate: Omit<Mandate, "id" | "lastScrapedPrice">
   ) => {
@@ -547,7 +604,11 @@ export default function Home() {
               auditLogs={auditLogs}
               onTriggerMandate={handleTriggerMandate}
               onViewReceipt={handleOpenReceipt}
-              onCreateMandateClick={() => setIsCreateOpen(true)}
+              onCreateMandateClick={() => {
+                setMandateInitialData(undefined);
+                setIsCreateOpen(true);
+              }}
+              onDeployPlanMandate={handleDeployPlanMandate}
             />
           }
         />
@@ -562,7 +623,10 @@ export default function Home() {
         auditLogs={auditLogs}
         onTriggerMandate={handleTriggerMandate}
         onViewReceipt={handleOpenReceipt}
-        onCreateMandateClick={() => setIsCreateOpen(true)}
+        onCreateMandateClick={() => {
+          setMandateInitialData(undefined);
+          setIsCreateOpen(true);
+        }}
       />
 
       {/* Dialog Modals */}
@@ -581,8 +645,12 @@ export default function Home() {
 
       <CreateMandateDialog
         isOpen={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
+        onClose={() => {
+          setIsCreateOpen(false);
+          setMandateInitialData(undefined);
+        }}
         onCreate={handleCreateMandate}
+        initialData={mandateInitialData}
       />
     </div>
   );

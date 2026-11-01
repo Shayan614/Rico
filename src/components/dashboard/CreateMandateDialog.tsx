@@ -16,17 +16,33 @@ interface CreateMandateDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onCreate: (mandate: Omit<Mandate, "id" | "lastScrapedPrice">) => void;
+  initialData?: {
+    service?: string;
+    budgetCeiling?: string;
+    recurrence?: string;
+    category?: string;
+  };
 }
 
 export function CreateMandateDialog({
   isOpen,
   onClose,
   onCreate,
+  initialData,
 }: CreateMandateDialogProps) {
-  const [service, setService] = useState("");
-  const [budgetCeiling, setBudgetCeiling] = useState("20.00");
-  const [recurrence, setRecurrence] = useState("Monthly on the 5th");
-  const [category, setCategory] = useState("Subscription");
+  const [service, setService] = useState(initialData?.service || "");
+  const [budgetCeiling, setBudgetCeiling] = useState(initialData?.budgetCeiling || "20.00");
+  const [recurrence, setRecurrence] = useState(initialData?.recurrence || "Monthly on the 5th");
+  const [category, setCategory] = useState(initialData?.category || "Subscription");
+
+  React.useEffect(() => {
+    if (initialData) {
+      if (initialData.service) setService(initialData.service);
+      if (initialData.budgetCeiling) setBudgetCeiling(initialData.budgetCeiling);
+      if (initialData.recurrence) setRecurrence(initialData.recurrence);
+      if (initialData.category) setCategory(initialData.category);
+    }
+  }, [initialData, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -19,7 +19,8 @@ import {
   TrendingDown,
   Check,
 } from "lucide-react";
-import { ScreencastFrame, CursorEvent, HelperBotSession, ParallelVerificationResult } from "@/lib/browser/types";
+import { ScreencastFrame, CursorEvent, HelperBotSession, ParallelVerificationResult, CalmPricingResult } from "@/lib/browser/types";
+import { CalmPricingLens } from "./CalmPricingLens";
 
 interface LiveBrowserViewportProps {
   onPlanSelected?: (service: string, price: number, planName: string) => void;
@@ -30,8 +31,11 @@ const PRESET_MERCHANTS = [
   { name: "Netflix", url: "https://help.netflix.com/en/node/24926" },
   { name: "Spotify", url: "https://www.spotify.com/us/premium/" },
   { name: "GitHub", url: "https://github.com/features/copilot/plans" },
+  { name: "Stripe", url: "https://stripe.com/pricing" },
   { name: "AWS", url: "https://aws.amazon.com/pricing/" },
   { name: "ChatGPT", url: "https://openai.com/chatgpt/pricing/" },
+  { name: "Twilio", url: "https://www.twilio.com/en-us/pricing" },
+  { name: "Snowflake", url: "https://www.snowflake.com/pricing/" },
 ];
 
 export function LiveBrowserViewport({
@@ -72,6 +76,11 @@ export function LiveBrowserViewport({
   const [isComparing, setIsComparing] = useState<boolean>(false);
   const [bestDeal, setBestDeal] = useState<ParallelVerificationResult["bestDeal"] | null>(null);
 
+  // Zephium Calm Pricing Lens State
+  const [isCalmLensActive, setIsCalmLensActive] = useState<boolean>(false);
+  const [calmData, setCalmData] = useState<CalmPricingResult | null>(null);
+  const [isSimplifying, setIsSimplifying] = useState<boolean>(false);
+
   const [cdpLogs, setCdpLogs] = useState<string[]>([
     "[CDP Engine] Initialized DevTools protocol session",
     "[Page.startScreencast] Format: JPEG, Max 1280x720 @ 30FPS",
@@ -90,7 +99,33 @@ export function LiveBrowserViewport({
     ]);
   }, []);
 
-  // Fetch initial bots
+  // Zephium Calm Pricing Lens: Fetch decluttered plans and stripped traps
+  const loadCalmPricing = useCallback(
+    async (serviceNameOrUrl: string) => {
+      setIsSimplifying(true);
+      try {
+        const res = await fetch("/api/browser/simplify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ service: serviceNameOrUrl, url: activeUrl }),
+        });
+        const data = await res.json();
+        if (data.success && data.result) {
+          setCalmData(data.result);
+          addLog(
+            `[Zephium Restyler] Decluttered ${data.result.service}: ${data.result.darkPatternsStrippedCount} dark patterns stripped, calm score ${data.result.calmScore}/100.`
+          );
+        }
+      } catch (err) {
+        addLog(`[Restyle Error]: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setIsSimplifying(false);
+      }
+    },
+    [activeUrl, addLog]
+  );
+
+  // Fetch initial bots & calm pricing baseline
   useEffect(() => {
     fetch("/api/browser/parallel")
       .then((res) => res.json())
@@ -101,7 +136,9 @@ export function LiveBrowserViewport({
         }
       })
       .catch((err) => console.warn("Failed to load initial helper bots:", err));
-  }, []);
+
+    loadCalmPricing("netflix");
+  }, [loadCalmPricing]);
 
   // Connect to live SSE endpoint
   useEffect(() => {
@@ -241,11 +278,39 @@ export function LiveBrowserViewport({
     }
   };
 
+  // 1-Click Interactive Plan Selection from Calm Pricing Lens
+  const handlePlanSelectedFromLens = (
+    service: string,
+    price: number,
+    planName: string
+  ) => {
+    setCursor({
+      x: 640,
+      y: 360,
+      action: "click",
+      label: `Locked: ${planName} ($${price.toFixed(2)})`,
+      timestamp: Date.now(),
+    });
+    setClickRipple({ x: 640, y: 360 });
+    setTimeout(() => setClickRipple(null), 1000);
+
+    addLog(
+      `[1-Click Mandate] Plan locked via Calm Lens: ${service} (${planName}) @ $${price.toFixed(2)}/mo`
+    );
+
+    if (onPlanSelected) {
+      onPlanSelected(service, price, planName);
+    }
+  };
+
   // Navigate to merchant URL using Playwright worker
   const handleNavigate = async (url: string, serviceName?: string) => {
     setIsNavigating(true);
     setStatus("navigating");
     addLog(`Initiating live navigation to: ${url}`);
+
+    // If Calm Lens is active or merchant changed, fetch simplified data
+    loadCalmPricing(serviceName || url);
 
     try {
       const res = await fetch("/api/browser/navigate", {
@@ -376,6 +441,39 @@ export function LiveBrowserViewport({
 
         {/* Right: Live Stream Status Pills & Actions */}
         <div className="flex items-center gap-2">
+          {/* Zephium Calm Pricing Lens Toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              const next = !isCalmLensActive;
+              setIsCalmLensActive(next);
+              if (next && !calmData) {
+                loadCalmPricing(activeUrl);
+              }
+              addLog(
+                next
+                  ? "[Zephium Restyler] Calm Pricing Lens Activated — Decluttering DOM"
+                  : "[CDP Engine] Restored Raw Live Screencast View"
+              );
+            }}
+            className={`px-2 py-0.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all border shadow-xs ${
+              isCalmLensActive
+                ? "bg-purple-600 text-white border-purple-400 ring-2 ring-purple-500/30"
+                : "bg-neutral-800/90 hover:bg-neutral-700 text-purple-300 border-purple-500/40 hover:text-white"
+            }`}
+            title="Toggle Zephium Calm Pricing Lens (Real-Time In-Place Restyling)"
+          >
+            <Sparkles className={`w-3.5 h-3.5 ${isCalmLensActive ? "animate-spin text-white" : "text-purple-400"}`} />
+            <span className="hidden md:inline font-sans">Calm Lens</span>
+            <span
+              className={`text-[9px] px-1 py-0.2 rounded font-mono ${
+                isCalmLensActive ? "bg-black/40 text-purple-200" : "bg-neutral-900 text-purple-300"
+              }`}
+            >
+              {isCalmLensActive ? "ACTIVE" : "RESTYLE"}
+            </span>
+          </button>
+
           {/* Live 30FPS Screencast Badge */}
           <div
             className={`hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono border ${
@@ -577,8 +675,31 @@ export function LiveBrowserViewport({
 
       {/* 4. Main Viewport Stage / Canvas Area */}
       <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden min-h-[320px]">
-        {/* Live Frame Screen */}
-        {currentFrame ? (
+        {/* Branch 1: Zephium Calm Pricing Lens Active View */}
+        {isCalmLensActive ? (
+          calmData ? (
+            <CalmPricingLens
+              data={calmData}
+              onSelectPlan={handlePlanSelectedFromLens}
+              isLoading={isSimplifying}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center p-6 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                <Sparkles className="w-6 h-6 animate-spin" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-purple-200">
+                  Restyling with Zephium Calm Pricing Lens...
+                </p>
+                <p className="text-xs text-neutral-400 mt-1 max-w-sm">
+                  Stripping marketing traps, normalizing tiered usage formulas, and unmasking hidden fees
+                </p>
+              </div>
+            </div>
+          )
+        ) : currentFrame ? (
+          /* Branch 2: Live CDP Screencast Stream */
           <div className="relative w-full h-full flex items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -647,11 +768,16 @@ export function LiveBrowserViewport({
 
         {/* Live Status Overlay Pill (Top Right) */}
         <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
-          {activeBot && (
+          {isCalmLensActive ? (
+            <div className="bg-purple-950/85 backdrop-blur-md px-2.5 py-1 rounded-full border border-purple-500/50 text-[10px] font-mono text-purple-300 font-bold shadow-lg flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 text-purple-400 animate-pulse" />
+              <span>Zephium Calm Lens Active</span>
+            </div>
+          ) : activeBot ? (
             <div className="bg-blue-950/80 backdrop-blur-md px-2.5 py-1 rounded-full border border-blue-500/40 text-[10px] font-mono text-blue-300 font-semibold shadow-lg">
               Active: {activeBot.service.split(" ")[0]}
             </div>
-          )}
+          ) : null}
 
           <div className="flex items-center gap-1.5 bg-neutral-950/85 backdrop-blur-md px-2.5 py-1 rounded-full border border-neutral-700/60 shadow-lg text-[10px] font-mono">
             <span

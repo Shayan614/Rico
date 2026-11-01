@@ -194,6 +194,26 @@ class PostHogServerTelemetry {
   }
 
   /**
+   * Generic event capture for custom agent events
+   */
+  public async capture(event: {
+    event: string;
+    distinctId?: string;
+    properties?: Record<string, unknown>;
+  }): Promise<void> {
+    const distinctId = event.distinctId || this.defaultDistinctId;
+    if (this.client) {
+      this.client.capture({
+        distinctId,
+        event: event.event,
+        properties: event.properties,
+      });
+    } else {
+      console.log(`[PostHog Telemetry] ${event.event}`, event.properties);
+    }
+  }
+
+  /**
    * Evaluate feature flags (e.g., 'strict-approval-mode' or 'autonomous-mode')
    */
   public async isFeatureFlagEnabled(

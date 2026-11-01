@@ -95,4 +95,34 @@ export interface ParallelVerificationResult {
   };
 }
 
+export interface CalmPlanTier {
+  id: string;
+  name: string;
+  headline: string;
+  price: number;
+  currency: string;
+  billingPeriod: "monthly" | "annually" | "usage" | "one_time";
+  normalizedMonthlyPrice: number;
+  transparentLabel: string;
+  trapAlerts: string[];
+  cleanFeatures: string[];
+  recommended?: boolean;
+  recommendationReason?: string;
+  rawMarketingTrapSnippet?: string;
+}
+
+export interface CalmPricingResult {
+  service: string;
+  url: string;
+  pageTitle: string;
+  category: "Streaming" | "Developer Tools" | "Cloud & Infrastructure" | "SaaS & AI";
+  simplifierSummary: string;
+  darkPatternsStrippedCount: number;
+  hiddenFeesUncovered: string[];
+  rawPageComplexityScore: number; // e.g. 85/100
+  calmScore: number; // e.g. 98/100
+  plans: CalmPlanTier[];
+  analyzedAt: string;
+}
+
 
