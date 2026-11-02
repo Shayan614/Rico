@@ -1,11 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { AppHeader } from "@/components/layout/AppHeader";
-import { ResizableSplit } from "@/components/layout/ResizableSplit";
-import { MobileDrawer } from "@/components/layout/MobileDrawer";
-import { ClaudeChat } from "@/components/chat/ClaudeChat";
-import { WorkSurface } from "@/components/dashboard/WorkSurface";
+import { ZephiumCleanHome } from "@/components/zephium/ZephiumCleanHome";
 import { Mandate, Transaction, AuditLog } from "@/components/dashboard/FinancialDashboard";
 import { ReceiptDialog, ReceiptData } from "@/components/dashboard/ReceiptDialog";
 import { ApprovalDialog, ApprovalRequest } from "@/components/dashboard/ApprovalDialog";
@@ -20,53 +16,7 @@ import {
   posthog,
 } from "@/lib/telemetry/posthog-client";
 
-const INITIAL_MESSAGES: ChatMessage[] = [
-  {
-    id: "msg-welcome",
-    sender: "assistant",
-    text: "Hello. I am Rico, your autonomous financial mandate assistant.\n\nSet spending rules like \"Pay Netflix $15.99 on the 5th, max $20\" and I will autonomously verify pricing, check safety limits, and execute transactions via the PayPal Sandbox MCP server.",
-    timestamp: "Just now",
-  },
-  {
-    id: "msg-demo-sample",
-    sender: "assistant",
-    text: "Completed scheduled execution for Netflix Standard HD. The verified price is $15.49, which is within your $20.00 ceiling.",
-    timestamp: "Just now",
-    thoughtProcess: {
-      summary: "Execution Steps (3)",
-      steps: [
-        {
-          step: "Interpreted recurring mandate",
-          status: "done",
-          detail: "Rule: Netflix, Max $20.00 USD",
-        },
-        {
-          step: "Verified merchant price",
-          status: "done",
-          detail: "Scraped live pricing: $15.49/mo",
-        },
-        {
-          step: "Safety ceiling check",
-          status: "done",
-          detail: "$15.49 <= $20.00 ceiling -> Approved",
-        },
-      ],
-    },
-    receipt: {
-      orderId: "ORD-84920491",
-      service: "Netflix Standard HD",
-      planName: "Standard 2-Screen HD Streaming",
-      verifiedPrice: 15.49,
-      budgetCeiling: 20.0,
-      currency: "USD",
-      paymentMethod: "Connected Account",
-      status: "COMPLETED",
-      timestamp: "Oct 31, 2026, 02:45 PM",
-      payerEmail: "user@example.com",
-      sandboxAuthCode: "AUTH-8921",
-    },
-  },
-];
+const INITIAL_MESSAGES: ChatMessage[] = [];
 
 export default function Home() {
   const [splitMode, setSplitMode] = useState<"split" | "chat" | "dashboard">(
@@ -598,113 +548,34 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 overflow-hidden font-sans transition-colors">
-      {/* Top Header */}
-      <AppHeader
-        splitMode={splitMode}
-        onSplitModeChange={setSplitMode}
-        strictMode={strictMode}
-        onToggleStrictMode={handleToggleStrictMode}
-        mandatesCount={mandates.length}
-        onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
-        onOpenCommandPalette={() => setIsCommandOpen(true)}
-      />
-
-      {/* Main Resizable Split View */}
-      <div className="flex-1 overflow-hidden">
-        <ResizableSplit
-          splitMode={splitMode}
-          defaultRatio={44}
-          left={
-            <ClaudeChat
-              messages={messages}
-              input={input}
-              onInputChange={(val) => setInput(val)}
-              onSendMessage={sendMessage}
-              onClearChat={clearChat}
-              onViewReceipt={handleOpenReceipt}
-              strictMode={strictMode}
-              onToggleStrictMode={handleToggleStrictMode}
-              isLoading={isLoading}
-              onStop={stop}
-            />
-          }
-          right={
-            <WorkSurface
-              mandates={mandates}
-              transactions={transactions}
-              auditLogs={auditLogs}
-              onTriggerMandate={handleTriggerMandate}
-              onViewReceipt={handleOpenReceipt}
-              onCreateMandateClick={() => {
-                setMandateInitialData(undefined);
-                setIsCreateOpen(true);
-              }}
-              onDeployPlanMandate={handleDeployPlanMandate}
-              approvalRequest={approvalRequest}
-              onApproveApproval={handleApprove}
-              onRejectApproval={handleReject}
-              onRefreshData={fetchDashboardData}
-            />
-          }
-        />
-      </div>
-
-      {/* Responsive Mobile Drawer (Bottom Sheet on Mobile) */}
-      <MobileDrawer
-        isOpen={isMobileDrawerOpen}
-        onClose={() => setIsMobileDrawerOpen(false)}
-        mandates={mandates}
-        transactions={transactions}
-        auditLogs={auditLogs}
-        onTriggerMandate={handleTriggerMandate}
-        onViewReceipt={handleOpenReceipt}
-        onCreateMandateClick={() => {
-          setMandateInitialData(undefined);
-          setIsCreateOpen(true);
-        }}
-      />
-
-      {/* Dialog Modals */}
-      <ReceiptDialog
-        receipt={selectedReceipt}
-        isOpen={!!selectedReceipt}
-        onClose={() => setSelectedReceipt(null)}
-      />
-
-      <ApprovalDialog
-        request={approvalRequest}
-        isOpen={!!approvalRequest}
-        onApprove={handleApprove}
-        onReject={handleReject}
-      />
-
-      <CreateMandateDialog
-        isOpen={isCreateOpen}
-        onClose={() => {
-          setIsCreateOpen(false);
-          setMandateInitialData(undefined);
-        }}
-        onCreate={handleCreateMandate}
-        initialData={mandateInitialData}
-      />
-
-      {/* Feature 7: Quick Command Launcher (Ctrl+K / ⌘K) */}
-      <QuickCommandLauncher
-        isOpen={isCommandOpen}
-        onClose={() => setIsCommandOpen(false)}
-        mandates={mandates}
-        transactions={transactions}
-        auditLogs={auditLogs}
-        onSendMessage={sendMessage}
-        onOpenCreateMandate={() => {
-          setMandateInitialData(undefined);
-          setIsCreateOpen(true);
-        }}
-        onViewReceipt={handleOpenReceipt}
-        onToggleStrictMode={handleToggleStrictMode}
-        strictMode={strictMode}
-      />
-    </div>
+    <ZephiumCleanHome
+      mandates={mandates}
+      transactions={transactions}
+      auditLogs={auditLogs}
+      messages={messages}
+      chatInput={input}
+      onChatInputChange={(val) => setInput(val)}
+      onSendMessage={sendMessage}
+      onClearChat={clearChat}
+      isChatLoading={isLoading}
+      onTriggerMandate={handleTriggerMandate}
+      onViewReceipt={handleOpenReceipt}
+      onCreateMandateClick={() => {
+        setMandateInitialData(undefined);
+        setIsCreateOpen(true);
+      }}
+      isCreateOpen={isCreateOpen}
+      setIsCreateOpen={setIsCreateOpen}
+      mandateInitialData={mandateInitialData}
+      strictMode={strictMode}
+      onToggleStrictMode={handleToggleStrictMode}
+      approvalRequest={approvalRequest}
+      onApproveApproval={handleApprove}
+      onRejectApproval={handleReject}
+      selectedReceipt={selectedReceipt}
+      setSelectedReceipt={setSelectedReceipt}
+      onDeployPlanMandate={handleDeployPlanMandate}
+      onCreateMandateSubmit={handleCreateMandate}
+    />
   );
 }

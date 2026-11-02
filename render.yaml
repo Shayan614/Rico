@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: rico
+    env: node
+    plan: starter
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: ./sqlite.db
+      - key: PAYPAL_ENVIRONMENT
+        value: sandbox
+      - key: PAYPAL_MCP_SERVER_URL
+        value: https://mcp.sandbox.paypal.com/sse
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: NEXT_PUBLIC_POSTHOG_KEY
+        sync: false
+      - key: NEXT_PUBLIC_POSTHOG_HOST
+        value: https://us.i.posthog.com
+      - key: POSTHOG_PROJECT_ID
+        value: "693411"
