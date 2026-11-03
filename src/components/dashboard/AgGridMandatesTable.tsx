@@ -275,7 +275,7 @@ export function AgGridMandatesTable({
           <Input
             value={quickFilterText}
             onChange={(e) => setQuickFilterText(e.target.value)}
-            placeholder="Quick search mandates..."
+            placeholder="Quick search spending rules..."
             className="h-8 pl-8 text-xs bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 rounded-lg focus-visible:ring-neutral-400"
           />
         </div>

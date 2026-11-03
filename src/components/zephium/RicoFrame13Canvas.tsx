@@ -107,7 +107,7 @@ export function RicoFrame13Canvas({
   const sampleSuggestions = [
     {
       title: "Pay Netflix $15.99 on 5th, max $20",
-      category: "Mandate",
+      category: "Spending Rule",
       icon: "💳",
       desc: "Autonomously verify plan price & capture via PayPal MCP",
     },
@@ -252,7 +252,7 @@ export function RicoFrame13Canvas({
               </button>
             </div>
 
-            {/* Today Group */}
+            {/* Spending Rules Group */}
             <div
               data-pencil-name="Today Group"
               className="box-border w-full h-fit shrink-0 flex flex-col gap-[4px] p-[4px_0px_0px_0px] justify-start items-start"
@@ -261,7 +261,7 @@ export function RicoFrame13Canvas({
                 data-pencil-name="Group Label"
                 className="text-[10.5px]/[normal] box-border text-[#52637A] font-semibold text-left"
               >
-                Active Mandates
+                Spending Rules
               </div>
 
               {mandates.slice(0, 3).map((mandate, idx) => {
@@ -500,7 +500,7 @@ export function RicoFrame13Canvas({
 
                 <div className="space-y-1.5">
                   <h2 className="text-xl font-bold text-[#0F172A] tracking-tight">
-                    What financial mandate should Rico handle?
+                    What spending rule should Rico handle?
                   </h2>
                   <p className="text-xs text-[#52637A] leading-relaxed max-w-[460px] mx-auto">
                     Rico autonomously verifies live merchant pricing via Playwright
@@ -572,7 +572,7 @@ export function RicoFrame13Canvas({
                 onChange={(e) => onChatInputChange(e.target.value)}
                 onKeyDown={handleKeyDown}
                 rows={1}
-                placeholder="Ask RICO anything, set a spending mandate, or verify pricing..."
+                placeholder="Ask RICO anything, set a spending rule, or verify pricing..."
                 className="w-full resize-none text-[13px] text-[#0F172A] placeholder-[#64748B] outline-none border-none bg-transparent font-normal leading-relaxed min-h-[24px] max-h-[100px]"
               />
 
@@ -588,7 +588,7 @@ export function RicoFrame13Canvas({
                   <button
                     type="button"
                     onClick={onCreateMandateClick}
-                    title="Create Structured Financial Mandate"
+                    title="Create New Spending Rule"
                     className="p-1 rounded text-[#475569] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors"
                   >
                     <Plus className="w-[15px] h-[15px]" />

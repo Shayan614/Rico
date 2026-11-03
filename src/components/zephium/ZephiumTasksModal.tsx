@@ -27,7 +27,7 @@ export function ZephiumTasksModal({
           <div className="flex items-center gap-2">
             <CheckSquare className="w-5 h-5 text-emerald-400" />
             <DialogTitle className="text-base font-semibold text-white">
-              Zephium Tasks (Autonomous Financial Mandates)
+              Zephium Tasks (Autonomous Spending Rules)
             </DialogTitle>
           </div>
           <button
@@ -36,14 +36,14 @@ export function ZephiumTasksModal({
             className="flex items-center gap-1 px-2.5 py-1 text-xs rounded bg-teal-500 hover:bg-teal-400 text-neutral-950 font-semibold transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Add Task</span>
+            <span>Add Rule</span>
           </button>
         </DialogHeader>
 
         <div className="p-4 max-h-[450px] overflow-y-auto space-y-2">
           {mandates.length === 0 ? (
             <div className="text-center py-10 text-neutral-500 text-xs">
-              No tasks scheduled yet. Describe a financial mandate like &quot;Pay Netflix $15.99 on 5th&quot;.
+              No spending rules scheduled yet. Describe a rule like &quot;Pay Netflix $15.99 on 5th&quot;.
             </div>
           ) : (
             mandates.map((m) => (
@@ -82,7 +82,7 @@ export function ZephiumTasksModal({
         </div>
 
         <div className="p-3 bg-neutral-950 border-t border-neutral-800 text-[11px] text-neutral-400 flex items-center justify-between">
-          <span>{mandates.length} linked agent tasks in SQLite memory</span>
+          <span>{mandates.length} spending rules in SQLite memory</span>
           <span className="text-teal-400 font-mono">Zero re-typing required</span>
         </div>
       </DialogContent>

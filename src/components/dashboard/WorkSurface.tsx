@@ -144,7 +144,7 @@ export function WorkSurface({
                 : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
             }`}
           >
-            <span>Mandates</span>
+            <span>Spending Rules</span>
             <Badge
               variant="outline"
               className="text-[9px] py-0 px-1 border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-900"
@@ -214,7 +214,7 @@ export function WorkSurface({
             className="h-7 px-2.5 rounded-md bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200 text-xs font-medium flex items-center gap-1 transition-colors shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>New Mandate</span>
+            <span>New Spending Rule</span>
           </button>
         </div>
       </div>
@@ -223,7 +223,7 @@ export function WorkSurface({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 p-3 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/20 shrink-0 text-xs">
         <div className="p-2.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-xs">
           <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400 text-[11px] mb-1">
-            <span>Active Mandates</span>
+            <span>Spending Rules</span>
             <CreditCard className="w-3.5 h-3.5 text-blue-500" />
           </div>
           <div className="text-lg font-bold text-neutral-900 dark:text-neutral-100">

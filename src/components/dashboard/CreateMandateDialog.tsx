@@ -68,7 +68,7 @@ export function CreateMandateDialog({
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-neutral-900 dark:text-neutral-100">
-              New Mandate
+              New Spending Rule
             </DialogTitle>
             <DialogDescription className="text-xs text-neutral-500">
               Set a spending limit and execution schedule
@@ -163,7 +163,7 @@ export function CreateMandateDialog({
               type="submit"
               className="h-8 px-3.5 rounded bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 text-xs font-semibold hover:opacity-90"
             >
-              Save Mandate
+              Save Spending Rule
             </button>
           </DialogFooter>
         </form>

@@ -243,7 +243,7 @@ export class GeminiAgentClient {
       textLower.startsWith("hi ") ||
       textLower.startsWith("hello ")
     ) {
-      const greetingMsg = `Hello! I am Rico, your autonomous financial assistant. I can help you manage recurring expenses, subscriptions, and financial purchases.\n\nWhat can I do for you today? For example, you can tell me to:\n- "Pay Netflix $15.99 on the 5th, max $20"\n- "Check the price of Spotify Premium"\n- "Compare prices for streaming services"\n- "Show me my active mandates"`;
+      const greetingMsg = `Hello! I am Rico, your autonomous financial assistant. I can help you manage recurring expenses, subscriptions, and financial purchases.\n\nWhat can I do for you today? For example, you can tell me to:\n- "Pay Netflix $15.99 on the 5th, max $20"\n- "Check the price of Spotify Premium"\n- "Compare prices for streaming services"\n- "Show me my spending rules"`;
 
       for (const word of greetingMsg.split(" ")) {
         yield { type: "token", text: word + " " };

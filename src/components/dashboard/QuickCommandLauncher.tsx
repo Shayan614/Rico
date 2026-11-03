@@ -34,7 +34,7 @@ interface QuickCommandLauncherProps {
 
 interface CommandItem {
   id: string;
-  category: "Actions" | "Mandates" | "Transactions" | "Navigation";
+  category: "Actions" | "Mandates" | "Spending Rules" | "Transactions" | "Navigation";
   title: string;
   subtitle: string;
   icon: React.ReactNode;
@@ -166,10 +166,10 @@ export function QuickCommandLauncher({
       {
         id: "action-new-mandate",
         category: "Actions",
-        title: "Create New Financial Mandate",
+        title: "Create New Spending Rule",
         subtitle: "Set spending ceiling, recurrence schedule, and safety rules",
         icon: <Plus className="w-4 h-4 text-emerald-400" />,
-        badge: "Mandate",
+        badge: "Spending Rule",
         action: () => {
           onOpenCreateMandate();
           onClose();
@@ -204,13 +204,13 @@ export function QuickCommandLauncher({
       }
     });
 
-    // 3. Search Active Mandates
+    // 3. Search Active Spending Rules
     mandates.forEach((m) => {
       if (!q || m.service.toLowerCase().includes(q) || m.category.toLowerCase().includes(q)) {
         items.push({
           id: `mandate-${m.id}`,
-          category: "Mandates",
-          title: `Trigger Mandate: ${m.service}`,
+          category: "Spending Rules",
+          title: `Run Spending Rule: ${m.service}`,
           subtitle: `Cap: $${m.budgetCeiling.toFixed(2)} ${m.currency} • ${m.recurrence} • Next: ${m.nextRun}`,
           icon: <CreditCard className="w-4 h-4 text-blue-400" />,
           badge: m.status,
