@@ -1,489 +1,685 @@
 "use client";
 
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
+import {
+  ArrowUp,
+  Loader2,
+  Sparkles,
+  RotateCcw,
+  PanelLeft,
+  SquarePen,
+  Plus,
+  SlidersHorizontal,
+  Columns2,
+  User,
+  Scan,
+  Folder,
+  ShieldCheck,
+  ShieldAlert,
+  Terminal,
+} from "lucide-react";
+import { Mandate, Transaction, AuditLog } from "@/components/dashboard/FinancialDashboard";
+import { ReceiptData } from "@/components/dashboard/ReceiptDialog";
+import { ApprovalRequest } from "@/components/dashboard/ApprovalDialog";
+import { ChatMessage } from "@/lib/chat/use-payagent-chat";
+import { ChatMessageRenderer } from "@/components/chat/ChatMessageRenderer";
+import { WorkSurface } from "@/components/dashboard/WorkSurface";
 
-export function RicoFrame13Canvas() {
+export interface RicoFrame13CanvasProps {
+  mandates: Mandate[];
+  transactions: Transaction[];
+  auditLogs: AuditLog[];
+  messages: ChatMessage[];
+  chatInput: string;
+  onChatInputChange: (val: string) => void;
+  onSendMessage: (val: string) => void;
+  onClearChat: () => void;
+  isChatLoading: boolean;
+  onTriggerMandate: (id: string) => void;
+  onViewReceipt: (receipt: ReceiptData) => void;
+  onCreateMandateClick: () => void;
+  strictMode: boolean;
+  onToggleStrictMode: () => void;
+  approvalRequest: ApprovalRequest | null;
+  onApproveApproval: (fundingSource?: "PAYPAL" | "BACKUP_CARD") => void;
+  onRejectApproval: () => void;
+  onDeployPlanMandate: (service: string, price: number, planName: string) => void;
+  onOpenCommandPalette?: () => void;
+  onRefreshData?: () => void;
+}
+
+export function RicoFrame13Canvas({
+  mandates,
+  transactions,
+  auditLogs,
+  messages,
+  chatInput,
+  onChatInputChange,
+  onSendMessage,
+  onClearChat,
+  isChatLoading,
+  onTriggerMandate,
+  onViewReceipt,
+  onCreateMandateClick,
+  strictMode,
+  onToggleStrictMode,
+  approvalRequest,
+  onApproveApproval,
+  onRejectApproval,
+  onDeployPlanMandate,
+  onOpenCommandPalette,
+  onRefreshData,
+}: RicoFrame13CanvasProps) {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSplitView, setIsSplitView] = useState(false);
+  const [activeThread, setActiveThread] = useState<string>("today-1");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-scroll on new messages or streaming tokens
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isChatLoading]);
+
+  // Auto-focus input on mount
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!chatInput.trim() || isChatLoading) return;
+    onSendMessage(chatInput.trim());
+    onChatInputChange("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  const handleSelectSuggestion = (prompt: string) => {
+    onSendMessage(prompt);
+  };
+
+  const sampleSuggestions = [
+    {
+      title: "Pay Netflix $15.99 on 5th, max $20",
+      category: "Mandate",
+      icon: "💳",
+      desc: "Autonomously verify plan price & capture via PayPal MCP",
+    },
+    {
+      title: "Spotify Premium $11.99 monthly, cap at $15",
+      category: "Subscription",
+      icon: "🎵",
+      desc: "Live headless browser scrape & budget guardrails",
+    },
+    {
+      title: "Verify AWS cloud bill cap at $120",
+      category: "Infrastructure",
+      icon: "☁️",
+      desc: "Calm Pricing Lens decluttering & ceiling check",
+    },
+    {
+      title: "Check 50% Student Discount for Notion ($4/mo)",
+      category: "Credits",
+      icon: "🎓",
+      desc: "Intercept payment with startup/student deal matrix",
+    },
+  ];
+
   return (
     <div
-      data-pencil-name="13 — Super Clean RICO Chat Page (Empty State — No Text In Between)"
-      className="box-border w-screen h-screen flex flex-row gap-0 justify-start items-start bg-[#DCEBFE] overflow-hidden select-none"
+      data-pencil-name="13 — Super Clean RICO Chat Page (Frame 13 Connected)"
+      className="box-border w-screen h-screen flex flex-row gap-0 justify-start items-start bg-[#DCEBFE] overflow-hidden select-none font-[Inter,system-ui,sans-serif]"
     >
+      {/* 1. Left Icon Rail */}
       <div
         data-pencil-name="Left Icon Rail"
-        className="box-border w-[46px] shrink-0 h-full flex flex-col gap-0 p-[12px_7px] justify-between items-center bg-[#CFE3FC] border-r border-[#BFD7F7]"
+        className="box-border w-[46px] shrink-0 h-full flex flex-col gap-0 p-[12px_7px] justify-between items-center bg-[#CFE3FC] border-r border-[#BFD7F7] z-20"
       >
         <div
           data-pencil-name="Rail Top"
           className="box-border w-full h-fit shrink-0 flex flex-col gap-[10px] justify-start items-center"
         >
-          <div
-            data-pencil-name="Top RICO Logo"
-            className="box-border w-[28px] h-[28px] shrink-0 flex flex-row gap-0 justify-center items-center bg-[#00000000]"
+          <button
+            type="button"
+            onClick={onClearChat}
+            title="RICO Autonomous Agent • Click to reset chat"
+            className="box-border w-[30px] h-[30px] shrink-0 flex flex-row gap-0 justify-center items-center bg-transparent hover:opacity-85 transition-opacity"
           >
             <div
               data-pencil-name="RICO Mark"
-              className="box-border [flex:1_1_0] h-full flex flex-row gap-0 justify-start items-start bg-[url('/brand-rico-mark-transparent.png')] bg-no-repeat bg-contain bg-center"
-            ></div>
-          </div>
+              className="box-border w-full h-full bg-[url('/brand-rico-mark-transparent.png')] bg-no-repeat bg-contain bg-center"
+            />
+          </button>
         </div>
+
         <div
           data-pencil-name="Rail Bottom"
           className="box-border w-full h-fit shrink-0 flex flex-col gap-[10px] justify-start items-center"
         >
-          <svg
-            data-pencil-name="Profile"
-            data-icon-name="user"
-            data-icon-set="lucide"
-            viewBox="0 0 13.99993896484375 14"
-            preserveAspectRatio="xMidYMid meet"
-            xmlns="http://www.w3.org/2000/svg"
-            className="box-border w-[15px] h-[15px] shrink-0"
+          <button
+            type="button"
+            onClick={onToggleStrictMode}
+            title={
+              strictMode
+                ? "Strict Approval Mode: Enabled (Halts on anomalies)"
+                : "Autonomous Mode: Active (Auto-approves within budget)"
+            }
+            className={`p-1.5 rounded-lg transition-colors ${
+              strictMode
+                ? "bg-amber-100 text-amber-700 border border-amber-300"
+                : "text-slate-600 hover:bg-[#BFD7F7]/60"
+            }`}
           >
-            <path
-              d="M6.59326 1.20313q-0.81006 0.11279-1.42871 0.61865-0.61523 0.50244-0.89551 1.24414-0.18115 0.48877-0.18115 1.02197 0 0.28027 0.04102 0.50586 0.04443 0.22217 0.14013 0.48877 0.15381 0.46143 0.46826 0.84766 0.31787 0.38281 0.7212 0.63574 0.36572 0.22559 0.73486 0.32471 0.37256 0.0957 0.80664 0.0957 0.22559 0 0.3623-0.01367 0.14014-0.01367 0.35206-0.05811 0.60156-0.15381 1.104-0.55713 0.50586-0.40674 0.7998-0.98096 0.19482-0.39307 0.26661-0.88183 0.02734-0.14014 0.02734-0.40674 0-0.2666-0.02734-0.40674-0.09912-0.65625-0.46485-1.20312-0.3623-0.54688-0.93652-0.89551-0.43408-0.2666-0.98096-0.36572-0.15381-0.02734-0.45459-0.03418-0.30078-0.00684-0.45459 0.02051z m0.60156 1.14843q0.40674 0.02734 0.78272 0.28711 0.37939 0.25977 0.58105 0.65967 0.20508 0.39648 0.18457 0.88184-0.02051 0.48193-0.28711 0.86132-0.15381 0.23584-0.37939 0.41358-0.22217 0.17432-0.46143 0.27002-0.19482 0.05811-0.2871 0.07861-0.08887 0.02051-0.32813 0.02051-0.23926 0-0.33154-0.02051-0.08887-0.02051-0.28369-0.07861-0.39307-0.14014-0.68018-0.46826-0.28711-0.32813-0.3999-0.73487-0.10938-0.46143 0.01367-0.90918 0.12646-0.44775 0.45459-0.76904 0.33154-0.32471 0.79297-0.45117 0.08545-0.02734 0.24609-0.04785 0.16064-0.02051 0.21533-0.00684l0.16748 0.01367z m-2.35156 5.85156q-0.96387 0.14014-1.65088 0.82715-0.54688 0.54688-0.75537 1.31592-0.07178 0.23926-0.08545 0.44092-0.01367 0.20166-0.01367 0.82031l0 0.76904 0.04102 0.1128q0.05811 0.0957 0.14013 0.18115 0.21191 0.19482 0.50586 0.14697 0.29395-0.04785 0.42041-0.31445l0.04102-0.09912 0.01367-0.79639q0.01367-0.61865 0.02734-0.77246 0.01367-0.15381 0.07178-0.34863 0.14014-0.37939 0.46826-0.68018 0.32813-0.30078 0.73487-0.41357 0.15381-0.04102 0.53662-0.05469 0.38623-0.01367 1.66113-0.01367 1.2749 0 1.65771 0.01367 0.38623 0.01367 0.54004 0.05469 0.42041 0.11279 0.75538 0.43066 0.33838 0.31445 0.46142 0.71778 0.05811 0.16748 0.06494 0.3247 0.00684 0.15381 0.02051 0.7417l0.01367 0.79639 0.04102 0.09912q0.12646 0.2666 0.42041 0.31445 0.29395 0.04785 0.50586-0.14697 0.08203-0.08545 0.14013-0.18115l0.04102-0.1128 0-0.76904q0-0.61865-0.01367-0.82031-0.01367-0.20166-0.08545-0.44092-0.08203-0.32129-0.23584-0.61523-0.2666-0.51953-0.73828-0.90235-0.46826-0.38623-1.02539-0.54004l-0.04444-0.01367q-0.16748-0.05811-0.29394-0.07178-0.15381-0.01367-0.56055-0.01367l-1.60986-0.01367q-2.05762 0-2.21143 0.02734z"
-              fill="#475569"
-            ></path>
-          </svg>
+            {strictMode ? (
+              <ShieldAlert className="w-[15px] h-[15px]" />
+            ) : (
+              <ShieldCheck className="w-[15px] h-[15px]" />
+            )}
+          </button>
+
+          <div
+            title="Authenticated PayPal Sandbox User: sb-buyer2026@personal.example.com"
+            className="w-[28px] h-[28px] rounded-full bg-[#BFD7F7] border border-[#A7C8F5] flex items-center justify-center text-slate-700 text-xs font-semibold"
+          >
+            <User className="w-[14px] h-[14px]" />
+          </div>
         </div>
       </div>
-      <div
-        data-pencil-name="RICO Chat Threads Sidebar"
-        className="box-border w-[244px] shrink-0 h-full flex flex-col gap-0 p-[10px_12px_14px_12px] justify-between items-start [background-image:linear-gradient(180deg,_#D6E8FD_0%,_#EBF3FE_65%,_#DCEBFE_100%)] bg-no-repeat bg-[length:100%_100%] border-r border-[#C8DDF8]"
-      >
+
+      {/* 2. RICO Chat Threads Sidebar */}
+      {isSidebarOpen && (
         <div
-          data-pencil-name="Sidebar Top Section"
-          className="box-border w-full h-fit shrink-0 flex flex-col gap-[10px] justify-start items-start"
+          data-pencil-name="RICO Chat Threads Sidebar"
+          className="box-border w-[244px] shrink-0 h-full flex flex-col gap-0 p-[10px_12px_14px_12px] justify-between items-start [background-image:linear-gradient(180deg,_#D6E8FD_0%,_#EBF3FE_65%,_#DCEBFE_100%)] bg-no-repeat bg-[length:100%_100%] border-r border-[#C8DDF8] z-10 transition-all"
         >
           <div
-            data-pencil-name="Sidebar Utility Bar"
-            className="box-border w-full h-fit shrink-0 flex flex-row gap-0 p-[2px_2px_4px_2px] justify-between items-center"
+            data-pencil-name="Sidebar Top Section"
+            className="box-border w-full h-fit shrink-0 flex flex-col gap-[10px] justify-start items-start"
           >
+            {/* Sidebar Utility Bar */}
             <div
-              data-pencil-name="Left"
-              className="box-border w-fit shrink-0 h-fit flex flex-row gap-[10px] justify-start items-center"
+              data-pencil-name="Sidebar Utility Bar"
+              className="box-border w-full h-fit shrink-0 flex flex-row gap-0 p-[2px_2px_4px_2px] justify-between items-center"
             >
-              <svg
-                data-pencil-name="Toggle"
-                data-icon-name="panel-left"
-                data-icon-set="lucide"
-                viewBox="0 0 13.99993896484375 14"
-                preserveAspectRatio="xMidYMid meet"
-                xmlns="http://www.w3.org/2000/svg"
-                className="box-border w-[14px] shrink-0 h-[14px]"
-              >
-                <path
-                  d="M2.60449 1.20313q-0.50586 0.08545-0.87842 0.43749-0.36914 0.34863-0.50927 0.86475-0.02734 0.08545-0.02735 0.71436l-0.01367 3.78027 0.01367 3.78027q0 0.62891 0.02735 0.71436 0.14014 0.48877 0.46826 0.82031 0.33154 0.32813 0.82031 0.46826 0.08545 0.02734 0.71436 0.02735l3.78027 0.01367 3.78027-0.01367q0.62891 0 0.71436-0.02735 0.48877-0.14014 0.81689-0.46826 0.33154-0.33154 0.47168-0.82031 0.02734-0.08545 0.02735-0.71436l0.01367-3.78027-0.01367-3.78027q0-0.62891-0.02735-0.71436-0.12646-0.48877-0.458-0.81689-0.32813-0.33154-0.80323-0.47168l-0.14013-0.04102-4.32715 0q-4.3374 0-4.4502 0.02734z m2.07129 5.79687l0 4.67578-0.88183 0q-0.88184 0-0.98096-0.02734-0.29395-0.05811-0.43408-0.33496l-0.04102-0.09913 0-8.42871 0.04102-0.09912q0.07178-0.14014 0.18798-0.229 0.11963-0.09229 0.25977-0.11963 0.08545 0 0.96729-0.01367l0.88183 0 0 4.67578z m6.6377-4.62109q0.2085 0.09912 0.30761 0.30761l0.04102 0.09912 0 8.42871-0.04102 0.09913q-0.14014 0.27685-0.43408 0.33496-0.09912 0.02734-2.73096 0.02734l-2.63183 0 0-9.35156 5.39013 0.01367 0.09913 0.04102z"
-                  fill="#475569"
-                ></path>
-              </svg>
-            </div>
-            <svg
-              data-pencil-name="New Chat"
-              data-icon-name="square-pen"
-              data-icon-set="lucide"
-              viewBox="0 0 13.99993896484375 14"
-              preserveAspectRatio="xMidYMid meet"
-              xmlns="http://www.w3.org/2000/svg"
-              className="box-border w-[14px] shrink-0 h-[14px]"
-            >
-              <path
-                d="M11.26904 0.61523q-0.18115 0.02734-0.3999 0.12647-0.21533 0.09912-0.38281 0.21191-0.12646 0.0957-2.84375 2.81983-2.71387 2.72412-2.78565 2.83349-0.12646 0.18457-0.19824 0.3794-0.06836 0.19482-0.3042 0.98096l-0.21191 0.76904q-0.05469 0.2085-0.06153 0.29394-0.00684 0.08203 0.02051 0.19483l0 0.01367q0.07178 0.25293 0.23926 0.42041 0.16748 0.16748 0.42041 0.23926l0.01367 0q0.11279 0.02734 0.19483 0.02051 0.08545-0.00684 0.29394-0.06153l0.76904-0.21191q0.78613-0.23584 0.98096-0.3042 0.19482-0.07178 0.3794-0.19824 0.10938-0.08545 2.83349-2.79932 2.72412-2.71729 2.81983-2.85742 0.19824-0.25293 0.29394-0.58789 0.09912-0.33496 0.05811-0.65967-0.05811-0.57422-0.40674-0.99121-0.34863-0.42041-0.90918-0.58789-0.15381-0.05811-0.43408-0.05811-0.28027 0-0.3794 0.01367z m-8.66455 0.58789q-0.50586 0.08545-0.87842 0.4375-0.36914 0.34863-0.50927 0.86475-0.02734 0.08545-0.02735 0.71436l-0.01367 3.78027 0.01367 3.78027q0 0.62891 0.02735 0.71436 0.14014 0.48877 0.46826 0.82031 0.33154 0.32813 0.82031 0.46826 0.08545 0.02734 0.71436 0.02735l3.78027 0.01367 3.78027-0.01367q0.62891 0 0.71436-0.02735 0.48877-0.14014 0.81689-0.46826 0.33154-0.33154 0.47168-0.82031 0.02734-0.08545 0.02735-0.42041l0.01367-4.2417-0.04102-0.08545q-0.09912-0.16748-0.28027-0.2666-0.05811-0.02734-0.09912-0.04102-0.04102-0.01367-0.15381-0.01367-0.11279 0-0.15381 0.01367-0.04101 0.01367-0.09912 0.04102-0.18115 0.09912-0.28027 0.2666l-0.04102 0.08545-0.01367 4.38183-0.04102 0.09913q-0.14014 0.27685-0.43408 0.33496-0.09912 0.02734-4.18701 0.02734-4.08789 0-4.18701-0.02734-0.29395-0.05811-0.43408-0.33496l-0.04102-0.09913 0-8.42871 0.04102-0.09912q0.09912-0.2085 0.30761-0.30761l0.09912-0.04102 4.38184-0.01367 0.08545-0.04102q0.06836-0.04443 0.15039-0.12646 0.08545-0.08545 0.12647-0.16065 0.04443-0.07861 0.04443-0.24609 0-0.16748-0.04102-0.25293-0.09912-0.16748-0.28027-0.2666l-0.08545-0.05469-2.2251 0q-2.2251 0-2.33789 0.02735z m9.11231 0.56055q0.14014 0.02734 0.2666 0.12647 0.12647 0.09912 0.18799 0.22558 0.06494 0.12305 0.06494 0.29395 0 0.16748-0.05469 0.29394-0.04443 0.06836-2.73437 2.77198-2.68652 2.7002-2.76856 2.74121-0.04102 0.03076-0.65967 0.21191-0.61523 0.18115-0.62207 0.17432-0.00684-0.00684 0.17432-0.62207 0.18115-0.61865 0.21533-0.67334 0.0376-0.05469 2.73779-2.74805 2.70361-2.69678 2.7583-2.72412 0.05811-0.03076 0.14698-0.05811 0.09228-0.02734 0.1333-0.02734 0.04443 0 0.15381 0.01367z"
-                fill="#0F172A"
-              ></path>
-            </svg>
-          </div>
-          <div
-            data-pencil-name="Ask RICO Sidebar Header"
-            className="box-border w-full h-fit shrink-0 flex flex-row gap-0 p-[0px_2px_2px_2px] justify-between items-center"
-          >
-            <div
-              data-pencil-name="Title"
-              className="text-[14px]/[normal] box-border text-[#0F172A] font-[Inter,system-ui,sans-serif] font-bold text-left [white-space:nowrap]"
-            >
-              Ask RICO
-            </div>
-            <div
-              data-pencil-name="New Chat Pill"
-              className="box-border w-fit shrink-0 h-fit flex flex-row gap-[4px] p-[3px_8px_3px_7px] justify-start items-center bg-[#C6DCFA] rounded-[7px]"
-            >
-              <svg
-                data-pencil-name="Plus"
-                data-icon-name="plus"
-                data-icon-set="lucide"
-                viewBox="0 0 13.99993896484375 14"
-                preserveAspectRatio="xMidYMid meet"
-                xmlns="http://www.w3.org/2000/svg"
-                className="box-border w-[11px] shrink-0 h-[11px]"
-              >
-                <path
-                  d="M6.90088 2.35156q-0.0957 0.01367-0.17432 0.05127-0.0752 0.03418-0.15381 0.12647-0.0752 0.08887-0.11279 0.16748-0.03418 0.0752-0.03418 0.32812l0 3.40088-3.66748 0-0.08545 0.04102q-0.22217 0.11279-0.30078 0.33838-0.0752 0.22217 0.00684 0.43408 0.05811 0.0957 0.14013 0.18115 0.08545 0.08203 0.16748 0.11963 0.08545 0.03418 0.33838 0.03418l3.40088 0 0 3.40088q0 0.25293 0.03418 0.33838 0.0376 0.08203 0.11963 0.16748 0.08545 0.08203 0.18799 0.1333 0.10596 0.04785 0.23242 0.04785 0.12646 0 0.229-0.04785 0.10596-0.05127 0.18799-0.1333 0.08545-0.08545 0.11963-0.16748 0.0376-0.08545 0.0376-0.33838l0-3.40088 3.40088 0q0.25293 0 0.33496-0.03418 0.08545-0.0376 0.16748-0.11963 0.08545-0.08545 0.1333-0.18799 0.05127-0.10596 0.05127-0.23242 0-0.12646-0.04102-0.23926-0.09912-0.19482-0.29394-0.29394l-0.08545-0.04102-3.66748 0 0-3.38721q0-0.2666-0.02734-0.32128-0.07178-0.19824-0.25293-0.30079-0.18115-0.10596-0.39307-0.06494z"
-                  fill="#0F172A"
-                ></path>
-              </svg>
               <div
-                data-pencil-name="New"
-                className="text-[10.5px]/[normal] box-border text-[#0F172A] font-[Inter,system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
+                data-pencil-name="Left"
+                className="box-border w-fit shrink-0 h-fit flex flex-row gap-[10px] justify-start items-center"
               >
-                New
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(false)}
+                  title="Collapse Sidebar"
+                  className="p-1 rounded text-slate-600 hover:bg-[#C8DDF8]/60 transition-colors"
+                >
+                  <PanelLeft className="w-[14px] h-[14px]" />
+                </button>
               </div>
+
+              <button
+                type="button"
+                onClick={onClearChat}
+                title="Start New Conversation"
+                className="p-1 rounded text-[#0F172A] hover:bg-[#C8DDF8]/60 transition-colors"
+              >
+                <SquarePen className="w-[14px] h-[14px]" />
+              </button>
             </div>
-          </div>
-          <div
-            data-pencil-name="Today Group"
-            className="box-border w-full h-fit shrink-0 flex flex-col gap-[4px] p-[4px_0px_0px_0px] justify-start items-start"
-          >
+
+            {/* Ask RICO Sidebar Header */}
             <div
-              data-pencil-name="Group Label"
-              className="text-[10.5px]/[normal] box-border text-[#52637A] font-[Inter,system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
-            >
-              Today
-            </div>
-            <div
-              data-pencil-name="What's worth reading?"
-              className="box-border w-full h-fit shrink-0 flex flex-col gap-[2px] p-[7px_9px] justify-start items-start bg-[#BBD6F8] rounded-[9px]"
+              data-pencil-name="Ask RICO Sidebar Header"
+              className="box-border w-full h-fit shrink-0 flex flex-row gap-0 p-[0px_2px_2px_2px] justify-between items-center"
             >
               <div
                 data-pencil-name="Title"
-                className="text-[11.5px]/[normal] box-border text-[#0F172A] font-[Inter,system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
-              >
-                What's worth reading?
-              </div>
-              <div
-                data-pencil-name="Context"
-                className="text-[10px]/[normal] box-border text-[#52637A] font-[Inter,system-ui,sans-serif] font-normal text-left [white-space:nowrap]"
-              >
-                news.ycombinator.com
-              </div>
-            </div>
-            <div
-              data-pencil-name="RICO status page setup"
-              className="box-border w-full h-fit shrink-0 flex flex-col gap-[2px] p-[7px_9px] justify-start items-start bg-[#00000000] rounded-[9px]"
-            >
-              <div
-                data-pencil-name="Title"
-                className="text-[11.5px]/[normal] box-border text-[#0F172A] font-[Inter,system-ui,sans-serif] font-medium text-left [white-space:nowrap]"
-              >
-                RICO status page setup
-              </div>
-              <div
-                data-pencil-name="Context"
-                className="text-[10px]/[normal] box-border text-[#52637A] font-[Inter,system-ui,sans-serif] font-normal text-left [white-space:nowrap]"
-              >
-                ~/Dev/rico-infra
-              </div>
-            </div>
-            <div
-              data-pencil-name="Terax v0.10.0 release notes"
-              className="box-border w-full h-fit shrink-0 flex flex-col gap-[2px] p-[7px_9px] justify-start items-start bg-[#00000000] rounded-[9px]"
-            >
-              <div
-                data-pencil-name="Title"
-                className="text-[11.5px]/[normal] box-border text-[#0F172A] font-[Inter,system-ui,sans-serif] font-medium text-left [white-space:nowrap]"
-              >
-                Terax v0.10.0 release notes
-              </div>
-              <div
-                data-pencil-name="Context"
-                className="text-[10px]/[normal] box-border text-[#52637A] font-[Inter,system-ui,sans-serif] font-normal text-left [white-space:nowrap]"
-              >
-                Terax v0.10.0.md
-              </div>
-            </div>
-          </div>
-          <div
-            data-pencil-name="Earlier Group"
-            className="box-border w-full h-fit shrink-0 flex flex-col gap-[4px] p-[4px_0px_0px_0px] justify-start items-start"
-          >
-            <div
-              data-pencil-name="Group Label"
-              className="text-[10.5px]/[normal] box-border text-[#52637A] font-[Inter,system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
-            >
-              Earlier
-            </div>
-            <div
-              data-pencil-name="Compare WebKit vs WebView2"
-              className="box-border w-full h-fit shrink-0 flex flex-col gap-[2px] p-[7px_9px] justify-start items-start bg-[#00000000] rounded-[9px]"
-            >
-              <div
-                data-pencil-name="Title"
-                className="text-[11.5px]/[normal] box-border text-[#0F172A] font-[Inter,system-ui,sans-serif] font-medium text-left [white-space:nowrap]"
-              >
-                Compare WebKit vs WebView2
-              </div>
-              <div
-                data-pencil-name="Context"
-                className="text-[10px]/[normal] box-border text-[#52637A] font-[Inter,system-ui,sans-serif] font-normal text-left [white-space:nowrap]"
-              >
-                rico.app
-              </div>
-            </div>
-            <div
-              data-pencil-name="Fix OAuth redirect loop"
-              className="box-border w-full h-fit shrink-0 flex flex-col gap-[2px] p-[7px_9px] justify-start items-start bg-[#00000000] rounded-[9px]"
-            >
-              <div
-                data-pencil-name="Title"
-                className="text-[11.5px]/[normal] box-border text-[#0F172A] font-[Inter,system-ui,sans-serif] font-medium text-left [white-space:nowrap]"
-              >
-                Fix OAuth redirect loop
-              </div>
-              <div
-                data-pencil-name="Context"
-                className="text-[10px]/[normal] box-border text-[#52637A] font-[Inter,system-ui,sans-serif] font-normal text-left [white-space:nowrap]"
-              >
-                github.com/crynta
-              </div>
-            </div>
-            <div
-              data-pencil-name="Summarize Rust 1.85 changes"
-              className="box-border w-full h-fit shrink-0 flex flex-col gap-[2px] p-[7px_9px] justify-start items-start bg-[#00000000] rounded-[9px]"
-            >
-              <div
-                data-pencil-name="Title"
-                className="text-[11.5px]/[normal] box-border text-[#0F172A] font-[Inter,system-ui,sans-serif] font-medium text-left [white-space:nowrap]"
-              >
-                Summarize Rust 1.85 changes
-              </div>
-              <div
-                data-pencil-name="Context"
-                className="text-[10px]/[normal] box-border text-[#52637A] font-[Inter,system-ui,sans-serif] font-normal text-left [white-space:nowrap]"
-              >
-                blog.rust-lang.org
-              </div>
-            </div>
-          </div>
-        </div>
-        <div
-          data-pencil-name="Sidebar Footer"
-          className="box-border w-full h-fit shrink-0 flex flex-row gap-0 p-[8px] justify-between items-center bg-[#CFE3FB] rounded-[10px]"
-        >
-          <div
-            data-pencil-name="Left"
-            className="box-border w-fit shrink-0 h-fit flex flex-row gap-[7px] justify-start items-center"
-          >
-            <svg
-              data-pencil-name="Sparkles"
-              data-icon-name="sparkles"
-              data-icon-set="lucide"
-              viewBox="0 0 13.99993896484375 14"
-              preserveAspectRatio="xMidYMid meet"
-              xmlns="http://www.w3.org/2000/svg"
-              className="box-border w-[13px] shrink-0 h-[13px]"
-            >
-              <path
-                d="M6.84619 0.58789q-0.28027 0.04102-0.54687 0.22559-0.29395 0.2085-0.40674 0.57422-0.02734 0.08203-0.3418 1.75683-0.31445 1.67139-0.35889 1.76367-0.04102 0.08887-0.10937 0.16065-0.07178 0.08203-0.15381 0.11279-0.11279 0.04102-0.4751 0.12305l-1.28857 0.23926q-1.68164 0.32129-1.77734 0.34863-0.23926 0.07178-0.44434 0.27002-0.20166 0.19482-0.29395 0.44092-0.08887 0.24268-0.06152 0.50244 0.02734 0.25635 0.16748 0.4956 0.09912 0.16748 0.27344 0.30762 0.17432 0.14014 0.35889 0.19824 0.0957 0.02734 1.76367 0.34863l1.28515 0.25293q0.37939 0.06836 0.50586 0.10938 0.08203 0.04443 0.15381 0.11279 0.05469 0.08545 0.09912 0.16748 0.04102 0.12646 0.10938 0.50586l0.23926 1.24414q0.32129 1.68164 0.34863 1.76367 0.15381 0.46484 0.58789 0.67335 0.2666 0.14014 0.51953 0.14013 0.25293 0 0.51953-0.14013 0.43408-0.2085 0.58789-0.67335 0.02734-0.08203 0.3418-1.74658 0.31445-1.66797 0.3418-1.72265 0.02734-0.11279 0.12646-0.2085 0.09912-0.09912 0.21191-0.14355 0.06836-0.02734 1.73291-0.3418 1.66797-0.31445 1.75-0.3418 0.46484-0.15381 0.67335-0.58789 0.2666-0.51953 0-1.03906-0.09912-0.2085-0.28028-0.36231-0.18115-0.15381-0.39307-0.22558-0.0957-0.02734-1.77734-0.34863l-1.23047-0.23926q-0.37939-0.06836-0.50586-0.10938-0.0957-0.03076-0.15381-0.08545-0.10938-0.11279-0.1538-0.23925-0.02734-0.06836-0.3418-1.73291-0.31445-1.66797-0.3418-1.75-0.14014-0.46484-0.60498-0.68702-0.14014-0.07178-0.31445-0.09912-0.17432-0.02734-0.3418-0.01367z m4.73047 0.01367q-0.12305 0.01367-0.24268 0.09912-0.11963 0.08203-0.1914 0.19483-0.04102 0.08545-0.05469 0.20508-0.01367 0.11621-0.01367 0.35546l0 0.29395-0.36572 0q-0.26318 0.01367-0.32813 0.02051-0.06152 0.00684-0.1333 0.03418-0.2666 0.12646-0.31445 0.42041-0.04785 0.29395 0.14697 0.50586 0.08545 0.08203 0.18115 0.14013 0.08545 0.02734 0.14697 0.03418 0.06494 0.00684 0.31788 0.02051l0.34863 0 0 0.34863q0.01367 0.25293 0.02051 0.31788 0.00683 0.06152 0.03418 0.14697 0.05811 0.0957 0.14013 0.18115 0.21191 0.19482 0.50586 0.14697 0.29395-0.04785 0.42041-0.31445 0.02734-0.08545 0.03418-0.14014 0.00684-0.05811 0.02051-0.32129l0-0.36572 0.29395 0q0.32129 0 0.45458-0.03418 0.1333-0.03418 0.25293-0.15381 0.11963-0.11963 0.15381-0.31445 0.03418-0.19824-0.04785-0.35205-0.04443-0.08203-0.12305-0.15039-0.0752-0.07178-0.1538-0.10596-0.07519-0.0376-0.14014-0.04443-0.06152-0.00684-0.32813-0.02051l-0.3623 0 0-0.34863q0-0.23926-0.00684-0.30762-0.00684-0.07178-0.03418-0.12646-0.08545-0.21191-0.25293-0.30762-0.16748-0.09912-0.37939-0.05811z m-4.26904 2.7583q0.23926 1.26123 0.29394 1.55518 0.05811 0.29395 0.1128 0.42041 0.12646 0.30762 0.38281 0.56738 0.25977 0.25635 0.56738 0.38281 0.12646 0.05469 0.41358 0.1128 0.28711 0.05469 1.54833 0.29394 1.56885 0.29395 1.57569 0.30762 0.00684 0.01367-1.60303 0.31445-1.60986 0.30078-1.72266 0.32813-0.39307 0.09912-0.72119 0.40674-0.32813 0.30762-0.46826 0.70068-0.04443 0.09912-0.09912 0.43408l-0.32129 1.63721q-0.25293 1.37402-0.2666 1.37402-0.01367 0-0.30762-1.55517-0.23926-1.2749-0.29736-1.56202-0.05469-0.28711-0.10938-0.41357-0.09912-0.23584-0.30078-0.46484-0.20166-0.23242-0.41357-0.35889-0.14014-0.09912-0.2666-0.14014-0.16748-0.04102-0.57422-0.12646l-1.28516-0.25293q-1.6543-0.30762-1.64062-0.32129 0.01367-0.01367 1.60986-0.30762l1.51416-0.29394q0.25293-0.05811 0.38965-0.1128 0.29395-0.11279 0.56738-0.37597 0.27344-0.2666 0.3999-0.57422 0.05469-0.12646 0.10938-0.41358 0.05811-0.28711 0.29736-1.56201 0.29395-1.55518 0.30762-1.55517 0.01367 0 0.30762 1.55517z m-5.33203 6.59326q-0.31104 0.07178-0.57764 0.23926-0.26318 0.16748-0.46143 0.42041-0.34863 0.4751-0.34863 1.05615 0 0.58105 0.3418 1.04249 0.34521 0.46143 0.91943 0.6289 0.64258 0.18457 1.25781-0.10937 0.32471-0.15381 0.56055-0.44092 0.23926-0.28711 0.35205-0.65283 0.02734-0.11279 0.03418-0.18116 0.00684-0.06836 0.02051-0.28027 0-0.25293-0.02051-0.3623-0.02051-0.11279-0.10596-0.32471-0.15381-0.36231-0.46826-0.63574-0.31445-0.27344-0.70752-0.38623-0.15381-0.02734-0.3999-0.03418-0.24268-0.00684-0.39648 0.0205z m0.60156 1.18946q0.24951 0.11279 0.31787 0.38623 0.07178 0.27344-0.0957 0.48193-0.12646 0.15381-0.29395 0.21192-0.16748 0.05469-0.33496 0-0.25293-0.07178-0.37939-0.33497-0.04102-0.09912-0.03418-0.23242 0.00684-0.1333 0.04785-0.23242 0.09912-0.22217 0.32129-0.29736 0.22559-0.07861 0.45117 0.01709z"
-                fill="#1E293B"
-              ></path>
-            </svg>
-            <div
-              data-pencil-name="Model"
-              className="text-[11px]/[normal] box-border text-[#0F172A] font-[Inter,system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
-            >
-              RICO AI · Ready
-            </div>
-          </div>
-          <svg
-            data-pencil-name="Settings"
-            data-icon-name="sliders-horizontal"
-            data-icon-set="lucide"
-            viewBox="0 0 13.99993896484375 14"
-            preserveAspectRatio="xMidYMid meet"
-            xmlns="http://www.w3.org/2000/svg"
-            className="box-border w-[12px] shrink-0 h-[12px]"
-          >
-            <path
-              d="M7.98096 1.20313q-0.23926 0.08545-0.35205 0.33837-0.02734 0.05469-0.04102 0.22217l-0.01367 1.09375q0 1.2168 0.01367 1.31592 0.05469 0.24951 0.24951 0.38281 0.19824 0.1333 0.4375 0.09229 0.0957-0.01367 0.16406-0.04785 0.07178-0.0376 0.14014-0.1128 0.07178-0.07861 0.10596-0.15381 0.0376-0.07861 0.04443-0.14013 0.00684-0.06494 0.02051-0.32813l0-0.36572 3.65381-0.01367 0.09912-0.04102q0.2666-0.12646 0.32129-0.42041 0.05469-0.29395-0.15381-0.50586-0.14014-0.14014-0.33496-0.16748-0.11279-0.02734-1.84912-0.02734l-1.73633 0 0-0.36572q-0.01367-0.26318-0.02051-0.32471-0.00684-0.06494-0.04443-0.14014-0.03418-0.07861-0.12647-0.16064-0.08887-0.08545-0.18115-0.11963-0.08887-0.0376-0.20849-0.0376-0.11963 0-0.18799 0.02734z m-6.33008 1.14843q-0.18115 0.02734-0.32129 0.16748-0.2085 0.21191-0.15381 0.50586 0.05469 0.29395 0.32129 0.42041l0.09912 0.04102 4.38184 0 0.09912-0.04102q0.08203-0.04443 0.15722-0.11279 0.07861-0.07178 0.1128-0.14014 0.0376-0.07178 0.05127-0.18115 0.04102-0.19824-0.05127-0.36572-0.08887-0.16748-0.28369-0.2666l-0.09912-0.04102-2.11573 0q-2.1123-0.01367-2.19775 0.01367z m2.87109 2.91211q-0.14014 0.04102-0.25976 0.16065-0.11963 0.11963-0.15381 0.24609-0.03418 0.12646-0.03418 0.44775l0 0.30762-2.4917 0-0.08545 0.05469q-0.18115 0.09912-0.28027 0.2666-0.04102 0.08545-0.04102 0.25293 0 0.16748 0.04102 0.24609 0.04443 0.0752 0.12646 0.16065 0.08545 0.08203 0.15381 0.12646l0.08545 0.04102 2.4917 0 0 0.30762q0 0.32129 0.03418 0.44775 0.03418 0.12646 0.14697 0.23926 0.19824 0.19482 0.46143 0.17431 0.2666-0.02051 0.42041-0.24609l0.01367-0.01367q0.05811-0.06836 0.07178-0.15039 0.01367-0.08545 0.02734-0.35205l0-1.94825q-0.01367-0.28027-0.02734-0.3623-0.01367-0.08545-0.07178-0.15381l0-0.01367q-0.0957-0.14014-0.28027-0.2085-0.18115-0.07178-0.34864-0.03076z m2.32422 1.17578q-0.11279 0.02734-0.21875 0.11963-0.10254 0.09229-0.15381 0.18457-0.04785 0.08887-0.04785 0.25635 0 0.16748 0.04102 0.24609 0.04443 0.0752 0.12646 0.16065 0.08545 0.08203 0.15381 0.12646l0.08545 0.04102 5.58496 0 0.08545-0.04102q0.06836-0.04443 0.15039-0.12646 0.08545-0.08545 0.12647-0.16065 0.04443-0.07861 0.04443-0.24609 0-0.16748-0.04102-0.25293-0.09912-0.16748-0.28027-0.2666l-0.08545-0.05469-2.77197 0q-2.7583 0-2.79932 0.01367z m2.37891 2.91211q-0.12646 0.01367-0.2461 0.10596-0.11621 0.08887-0.17431 0.21533l-0.04102 0.09912 0 2.63184 0.04102 0.09912q0.12646 0.2666 0.42041 0.31445 0.29395 0.04785 0.50586-0.14697 0.08203-0.08545 0.14013-0.18115 0.02734-0.08545 0.03418-0.14698 0.00684-0.06494 0.02051-0.31787l0-0.34863 2.45068-0.01367 0.1128-0.04102q0.2085-0.11279 0.29053-0.32129 0.08545-0.21191 0.00683-0.4204-0.0752-0.21192-0.28369-0.32471l-0.09912-0.04102-2.47803-0.01367 0-0.29395q0-0.29395-0.02734-0.39306-0.04102-0.23584-0.23242-0.36914-0.18799-0.1333-0.44092-0.09229z m-7.61524 1.16211q-0.12646 0.02734-0.23925 0.1333-0.10938 0.10596-0.16749 0.23243-0.06836 0.2085 0.01368 0.42724 0.08545 0.21533 0.29394 0.31445l0.1128 0.04102 5.50292 0 0.1128-0.04102q0.2085-0.11279 0.29053-0.32129 0.08545-0.21191 0.00683-0.4204-0.0752-0.21192-0.28369-0.32471l-0.09912-0.04102-2.73096-0.01367q-2.72754 0-2.81299 0.01367z"
-              fill="#475569"
-            ></path>
-          </svg>
-        </div>
-      </div>
-      <div
-        data-pencil-name="Full Chat Main Viewport (No Split)"
-        className="box-border flex-1 min-w-0 h-full flex flex-col gap-0 p-[8px] justify-start items-start bg-[#DCEBFE]"
-      >
-        <div
-          data-pencil-name="Clean Chat Canvas Container"
-          className="box-border w-full min-w-0 flex-1 flex flex-col gap-0 justify-between items-center [background-image:linear-gradient(180deg,_#EBF4FE_0%,_#F6FAFF_50%,_#EAF3FE_100%)] bg-no-repeat bg-[length:100%_100%] [outline:1px_solid_#C8DDF8] [outline-offset:-0.5px] rounded-[12px]"
-        >
-          <div
-            data-pencil-name="Full Chat Top Header Bar"
-            className="box-border w-full h-[47px] shrink-0 flex flex-row gap-0 p-[12px_20px] justify-between items-center border-b border-[#DCE9FA]"
-          >
-            <div
-              data-pencil-name="Header Left"
-              className="box-border w-fit shrink-0 h-fit flex flex-row gap-[8px] justify-start items-center"
-            >
-              <div
-                data-pencil-name="Chat Title"
-                className="text-[13.5px]/[normal] box-border text-[#0F172A] font-[Inter,system-ui,sans-serif] font-bold text-left [white-space:nowrap]"
+                className="text-[14px]/[normal] box-border text-[#0F172A] font-bold text-left"
               >
                 Ask RICO
               </div>
+              <button
+                type="button"
+                onClick={onClearChat}
+                className="box-border w-fit shrink-0 h-fit flex flex-row gap-[4px] p-[3px_8px_3px_7px] justify-start items-center bg-[#C6DCFA] hover:bg-[#B3D2F8] rounded-[7px] text-[#0F172A] text-[10.5px] font-semibold transition-colors shadow-2xs"
+              >
+                <Plus className="w-[11px] h-[11px]" />
+                <span>New</span>
+              </button>
             </div>
+
+            {/* Today Group */}
+            <div
+              data-pencil-name="Today Group"
+              className="box-border w-full h-fit shrink-0 flex flex-col gap-[4px] p-[4px_0px_0px_0px] justify-start items-start"
+            >
+              <div
+                data-pencil-name="Group Label"
+                className="text-[10.5px]/[normal] box-border text-[#52637A] font-semibold text-left"
+              >
+                Active Mandates
+              </div>
+
+              {mandates.slice(0, 3).map((mandate, idx) => {
+                const isSelected = activeThread === `mandate-${idx}`;
+                return (
+                  <button
+                    key={mandate.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveThread(`mandate-${idx}`);
+                      onSendMessage(
+                        `Execute mandate now for ${mandate.service}`
+                      );
+                    }}
+                    className={`box-border w-full h-fit shrink-0 flex flex-col gap-[2px] p-[7px_9px] justify-start items-start rounded-[9px] text-left transition-colors ${
+                      isSelected
+                        ? "bg-[#BBD6F8] shadow-2xs"
+                        : "bg-transparent hover:bg-[#C8DDF8]/50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-[11.5px] text-[#0F172A] font-semibold truncate max-w-[150px]">
+                        {mandate.service}
+                      </span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    </div>
+                    <div className="text-[10px] text-[#52637A] font-normal">
+                      Cap: ${mandate.budgetCeiling.toFixed(2)} •{" "}
+                      {mandate.recurrence}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Earlier Group */}
+            <div
+              data-pencil-name="Earlier Group"
+              className="box-border w-full h-fit shrink-0 flex flex-col gap-[4px] p-[4px_0px_0px_0px] justify-start items-start"
+            >
+              <div
+                data-pencil-name="Group Label"
+                className="text-[10.5px]/[normal] box-border text-[#52637A] font-semibold text-left"
+              >
+                Quick Actions
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onSendMessage(
+                    "Inspect live pricing for Netflix Standard plan and report discrepancies"
+                  )
+                }
+                className="box-border w-full h-fit shrink-0 flex flex-col gap-[2px] p-[7px_9px] justify-start items-start bg-transparent hover:bg-[#C8DDF8]/50 rounded-[9px] text-left transition-colors"
+              >
+                <div className="text-[11.5px] text-[#0F172A] font-medium truncate">
+                  Inspect Netflix Live DOM
+                </div>
+                <div className="text-[10px] text-[#52637A]">
+                  Playwright CDP Screencast
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onSendMessage(
+                    "Scan persona savings for Notion, PostHog, and Stripe deals"
+                  )
+                }
+                className="box-border w-full h-fit shrink-0 flex flex-col gap-[2px] p-[7px_9px] justify-start items-start bg-transparent hover:bg-[#C8DDF8]/50 rounded-[9px] text-left transition-colors"
+              >
+                <div className="text-[11.5px] text-[#0F172A] font-medium truncate">
+                  Scan Student / Startup Credits
+                </div>
+                <div className="text-[10px] text-[#52637A]">
+                  50% Deal Matrix Optimizer
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onSendMessage(
+                    "Simulate price increase on Spotify to test 20% guardrail anomaly"
+                  )
+                }
+                className="box-border w-full h-fit shrink-0 flex flex-col gap-[2px] p-[7px_9px] justify-start items-start bg-transparent hover:bg-[#C8DDF8]/50 rounded-[9px] text-left transition-colors"
+              >
+                <div className="text-[11.5px] text-[#0F172A] font-medium truncate">
+                  Test Anomaly Guardrail
+                </div>
+                <div className="text-[10px] text-[#52637A]">
+                  Triggers human approval modal
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Sidebar Footer */}
+          <div
+            data-pencil-name="Sidebar Footer"
+            className="box-border w-full h-fit shrink-0 flex flex-row gap-0 p-[8px] justify-between items-center bg-[#CFE3FB] rounded-[10px] border border-[#BDD6F5]"
+          >
+            <div
+              data-pencil-name="Left"
+              className="box-border w-fit shrink-0 h-fit flex flex-row gap-[7px] justify-start items-center"
+            >
+              <Sparkles className="w-[13px] h-[13px] text-blue-600 shrink-0" />
+              <div
+                data-pencil-name="Model"
+                className="text-[11px] box-border text-[#0F172A] font-semibold text-left truncate"
+              >
+                Gemini 3.8 Flash
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onToggleStrictMode}
+              title={
+                strictMode
+                  ? "Toggle Mode: Currently in Strict Approval Mode"
+                  : "Toggle Mode: Currently in Autonomous Mode"
+              }
+              className="p-1 rounded hover:bg-[#BBD6F8] text-slate-700 transition-colors"
+            >
+              <SlidersHorizontal className="w-[12px] h-[12px]" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Main Stage: Chat Viewport + Optional Split View Pane */}
+      <div
+        data-pencil-name="Full Chat Main Viewport"
+        className="box-border flex-1 min-w-0 h-full flex flex-row gap-2 p-[8px] justify-start items-start bg-[#DCEBFE] overflow-hidden"
+      >
+        {/* Chat Canvas Container */}
+        <div
+          data-pencil-name="Clean Chat Canvas Container"
+          className={`box-border h-full flex flex-col gap-0 justify-between items-center [background-image:linear-gradient(180deg,_#EBF4FE_0%,_#F6FAFF_50%,_#EAF3FE_100%)] bg-no-repeat bg-[length:100%_100%] [outline:1px_solid_#C8DDF8] [outline-offset:-0.5px] rounded-[12px] overflow-hidden shadow-xs transition-all ${
+            isSplitView ? "w-1/2 min-w-[420px]" : "w-full"
+          }`}
+        >
+          {/* Full Chat Top Header Bar */}
+          <div
+            data-pencil-name="Full Chat Top Header Bar"
+            className="box-border w-full h-[47px] shrink-0 flex flex-row gap-0 p-[10px_16px] justify-between items-center border-b border-[#DCE9FA] bg-white/40 backdrop-blur-xs select-none"
+          >
+            <div
+              data-pencil-name="Header Left"
+              className="box-border w-fit shrink-0 h-fit flex flex-row gap-[10px] justify-start items-center"
+            >
+              {!isSidebarOpen && (
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(true)}
+                  title="Expand Sidebar"
+                  className="p-1 rounded text-slate-600 hover:bg-[#D6E8FD] transition-colors"
+                >
+                  <PanelLeft className="w-[15px] h-[15px]" />
+                </button>
+              )}
+
+              <div
+                data-pencil-name="Chat Title"
+                className="text-[13.5px] box-border text-[#0F172A] font-bold text-left"
+              >
+                Ask RICO
+              </div>
+
+              <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-[10px] font-medium text-emerald-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>PayPal MCP Server Connected</span>
+              </div>
+            </div>
+
             <div
               data-pencil-name="Header Right Controls"
               className="box-border w-fit shrink-0 h-fit flex flex-row gap-[8px] justify-start items-center"
             >
-              <div
-                data-pencil-name="Split View Toggle Button (Off)"
-                className="box-border w-fit shrink-0 h-fit flex flex-row gap-[5px] p-[5px_10px] justify-start items-center bg-[#E2EEFD] [outline:1px_solid_#C8DDF8] [outline-offset:-0.5px] rounded-[8px]"
+              {/* Split View Toggle Button */}
+              <button
+                type="button"
+                onClick={() => setIsSplitView((prev) => !prev)}
+                className={`box-border w-fit shrink-0 h-fit flex flex-row gap-[5px] p-[5px_10px] justify-start items-center rounded-[8px] transition-all text-[11px] font-medium shadow-2xs ${
+                  isSplitView
+                    ? "bg-[#2563EB] text-white [outline:1px_solid_#1D4ED8]"
+                    : "bg-[#E2EEFD] text-[#334155] hover:bg-[#D4E6FC] [outline:1px_solid_#C8DDF8]"
+                }`}
+                title="Toggle Split Command Center View (AG Grid, Screencast & Sentinel)"
               >
-                <svg
-                  data-pencil-name="Columns"
-                  data-icon-name="columns-2"
-                  data-icon-set="lucide"
-                  viewBox="0 0 13.99993896484375 14"
-                  preserveAspectRatio="xMidYMid meet"
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="box-border w-[12px] shrink-0 h-[12px]"
+                <Columns2 className="w-[12px] h-[12px]" />
+                <span data-pencil-name="Split Label">
+                  {isSplitView ? "Split view: On" : "Split view"}
+                </span>
+              </button>
+
+              {/* Quick Command Launcher button (⌘K) */}
+              {onOpenCommandPalette && (
+                <button
+                  type="button"
+                  onClick={onOpenCommandPalette}
+                  className="hidden md:flex items-center gap-1 px-2 py-1 rounded-[8px] bg-[#E2EEFD] text-[#334155] hover:bg-[#D4E6FC] border border-[#C8DDF8] text-[10.5px] font-medium transition-colors"
+                  title="Open Quick Command Palette (⌘K / Ctrl+K)"
                 >
-                  <path
-                    d="M2.60449 1.20313q-0.50586 0.08545-0.87842 0.43749-0.36914 0.34863-0.50927 0.86475-0.02734 0.08545-0.02735 0.71436l-0.01367 3.78027 0.01367 3.78027q0 0.62891 0.02735 0.71436 0.14014 0.48877 0.46826 0.82031 0.33154 0.32813 0.82031 0.46826 0.08545 0.02734 0.71436 0.02735l3.78027 0.01367 3.78027-0.01367q0.62891 0 0.71436-0.02735 0.48877-0.14014 0.81689-0.46826 0.33154-0.33154 0.47168-0.82031 0.02734-0.08545 0.02735-0.71436l0.01367-3.78027-0.01367-3.78027q0-0.62891-0.02735-0.71436-0.12646-0.48877-0.458-0.81689-0.32813-0.33154-0.80323-0.47168l-0.14013-0.04102-4.32715 0q-4.3374 0-4.4502 0.02734z m3.82129 5.79687l0 4.67578-1.76367 0q-1.75 0-1.84912-0.02734-0.29395-0.05811-0.43408-0.33496l-0.04102-0.09913 0-8.42871 0.04102-0.09912q0.07178-0.14014 0.18798-0.229 0.11963-0.09229 0.25977-0.11963 0.08545 0 1.83545-0.01367l1.76367 0 0 4.67578z m4.8877-4.62109q0.2085 0.09912 0.30761 0.30761l0.04102 0.09912 0 8.42871-0.04102 0.09913q-0.14014 0.27685-0.43408 0.33496-0.09912 0.02734-1.84912 0.02734l-1.76367 0 0-9.35156 3.64014 0.01367 0.09912 0.04102z"
-                    fill="#334155"
-                  ></path>
-                </svg>
-                <div
-                  data-pencil-name="Split Label"
-                  className="text-[11px]/[normal] box-border text-[#334155] font-[Inter,system-ui,sans-serif] font-medium text-left [white-space:nowrap]"
-                >
-                  Split view
-                </div>
-              </div>
-              <svg
-                data-pencil-name="More"
-                data-icon-name="ellipsis"
-                data-icon-set="lucide"
-                viewBox="0 0 13.99993896484375 14"
-                preserveAspectRatio="xMidYMid meet"
-                xmlns="http://www.w3.org/2000/svg"
-                className="box-border w-[14px] shrink-0 h-[14px]"
+                  <Terminal className="w-3 h-3" />
+                  <span className="font-mono text-[9px] bg-white/70 px-1 rounded">
+                    ⌘K
+                  </span>
+                </button>
+              )}
+
+              {/* Clear chat button */}
+              <button
+                type="button"
+                onClick={onClearChat}
+                title="Reset Conversation"
+                className="p-1.5 rounded-[8px] text-[#475569] hover:text-[#0F172A] hover:bg-[#E2EEFD] transition-colors"
               >
-                <path
-                  d="M2.77197 5.85156q-0.2666 0.01367-0.50244 0.18115-0.33838 0.22559-0.45801 0.59815-0.11621 0.36914 0.00684 0.7417 0.12646 0.36914 0.46484 0.6084 0.26318 0.18115 0.62891 0.18115 0.25293 0 0.44092-0.0752 0.18799-0.07861 0.37597-0.2666 0.19141-0.19141 0.26661-0.37939 0.07861-0.18799 0.07861-0.44092 0-0.25293-0.07861-0.44092-0.0752-0.18799-0.25635-0.37256-0.15381-0.15381-0.29395-0.22216-0.30762-0.15381-0.67334-0.1128z m4.10157 0q-0.2085 0.01367-0.37598 0.09912-0.23926 0.11279-0.3999 0.31446-0.16064 0.20166-0.23243 0.44091-0.02734 0.11279-0.02734 0.29395 0 0.18115 0.02734 0.29395 0.08545 0.30762 0.30762 0.5332 0.22559 0.22217 0.5332 0.30762 0.11279 0.02734 0.29395 0.02734 0.18115 0 0.29395-0.02734 0.30762-0.08545 0.52978-0.30762 0.22559-0.22559 0.31104-0.5332 0.02734-0.11279 0.02734-0.29395 0-0.18115-0.02734-0.29395-0.07178-0.23926-0.23243-0.44091-0.16064-0.20166-0.3999-0.31446-0.26318-0.14014-0.6289-0.09912z m4.07421 0q-0.39307 0.02734-0.70068 0.33496-0.16748 0.18457-0.24609 0.37256-0.0752 0.18799-0.0752 0.44092 0 0.25293 0.0752 0.44775 0.07861 0.19482 0.2666 0.3794 0.19141 0.18115 0.37939 0.25976 0.18799 0.0752 0.44092 0.0752 0.36572 0 0.62891-0.18115 0.33838-0.23926 0.46142-0.6084 0.12647-0.37256 0.00684-0.7417-0.11621-0.37256-0.46143-0.60156-0.3418-0.23242-0.77588-0.17774z"
-                  fill="#475569"
-                ></path>
-              </svg>
+                <RotateCcw className="w-[13px] h-[13px]" />
+              </button>
             </div>
           </div>
+
+          {/* Chat Messages Viewport */}
+          <div className="flex-1 w-full min-h-0 overflow-y-auto px-4 sm:px-6 py-4 flex flex-col justify-start space-y-4">
+            {messages.length === 0 ? (
+              /* Frame 13 Super Clean Empty State */
+              <div className="flex-1 flex flex-col items-center justify-center text-center max-w-[620px] mx-auto py-12 px-4 space-y-6">
+                <div className="w-14 h-14 rounded-2xl bg-[#CFE3FC] border border-[#A7C8F5] flex items-center justify-center shadow-xs">
+                  <div className="w-9 h-9 bg-[url('/brand-rico-mark-transparent.png')] bg-no-repeat bg-contain bg-center" />
+                </div>
+
+                <div className="space-y-1.5">
+                  <h2 className="text-xl font-bold text-[#0F172A] tracking-tight">
+                    What financial mandate should Rico handle?
+                  </h2>
+                  <p className="text-xs text-[#52637A] leading-relaxed max-w-[460px] mx-auto">
+                    Rico autonomously verifies live merchant pricing via Playwright
+                    headless CDP automation, applies budget guardrails, and captures
+                    payments on the PayPal Sandbox MCP server.
+                  </p>
+                </div>
+
+                {/* Quick Suggestion Pills */}
+                <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 text-left">
+                  {sampleSuggestions.map((item, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => handleSelectSuggestion(item.title)}
+                      className="group p-3 rounded-xl bg-white/90 hover:bg-white border border-[#C8DDF8] hover:border-[#93C5FD] shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">{item.icon}</span>
+                        <span className="text-[11.5px] font-semibold text-[#0F172A] group-hover:text-blue-600 transition-colors line-clamp-1">
+                          {item.title}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-[#64748B] mt-1 line-clamp-1">
+                        {item.desc}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              /* Active Message Stream */
+              <div className="w-full max-w-[720px] mx-auto space-y-5">
+                {messages.map((message) => (
+                  <ChatMessageRenderer
+                    key={message.id}
+                    message={message}
+                    onViewReceipt={onViewReceipt}
+                    isExpandedDefault={true}
+                  />
+                ))}
+
+                {isChatLoading && (
+                  <div className="flex items-center gap-2 text-xs text-[#52637A] bg-white/70 backdrop-blur-xs p-3 rounded-xl border border-[#C8DDF8] max-w-[340px]">
+                    <Loader2 className="w-4 h-4 text-blue-600 animate-spin shrink-0" />
+                    <span>Rico is reasoning and verifying pricing...</span>
+                  </div>
+                )}
+
+                <div ref={messagesEndRef} />
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Centered Composer Row */}
           <div
             data-pencil-name="Bottom Centered Composer Row"
-            className="box-border w-[620px] max-w-[calc(100%-24px)] h-fit shrink-0 flex flex-col gap-0 p-[0px_0px_14px_0px] justify-start items-start"
+            className="box-border w-[640px] max-w-[calc(100%-20px)] h-fit shrink-0 flex flex-col gap-0 p-[0px_0px_12px_0px] justify-start items-start"
           >
-            <div
+            <form
+              onSubmit={handleSubmit}
               data-pencil-name="RICO Full Chat Composer"
-              className="box-border w-full h-fit shrink-0 flex flex-col gap-[10px] p-[10px_14px] justify-start items-start bg-[#FFFFFF] [outline:1.5px_solid_#C7DCF6] [outline-offset:-0.75px] rounded-[16px]"
+              className="box-border w-full h-fit shrink-0 flex flex-col gap-[8px] p-[10px_14px] justify-start items-start bg-[#FFFFFF] [outline:1.5px_solid_#C7DCF6] [outline-offset:-0.75px] rounded-[16px] shadow-sm hover:[outline-color:#93C5FD] focus-within:[outline-color:#2563EB] transition-all"
             >
-              <div
-                data-pencil-name="Prompt Placeholder"
-                className="text-[13px]/[normal] box-border text-[#64748B] font-[Inter,system-ui,sans-serif] font-normal text-left [white-space:nowrap]"
-              >
-                Ask RICO anything, write a note, or start a task...
-              </div>
+              {/* Interactive Input Textarea */}
+              <textarea
+                ref={textareaRef}
+                value={chatInput}
+                onChange={(e) => onChatInputChange(e.target.value)}
+                onKeyDown={handleKeyDown}
+                rows={1}
+                placeholder="Ask RICO anything, set a spending mandate, or verify pricing..."
+                className="w-full resize-none text-[13px] text-[#0F172A] placeholder-[#64748B] outline-none border-none bg-transparent font-normal leading-relaxed min-h-[24px] max-h-[100px]"
+              />
+
+              {/* Composer Bottom Controls */}
               <div
                 data-pencil-name="Composer Bottom Controls"
-                className="box-border w-full h-fit shrink-0 flex flex-row gap-0 justify-between items-center"
+                className="box-border w-full h-fit shrink-0 flex flex-row gap-0 justify-between items-center pt-1"
               >
                 <div
                   data-pencil-name="Left Icons"
-                  className="box-border w-fit shrink-0 h-fit flex flex-row gap-[10px] justify-start items-center"
+                  className="box-border w-fit shrink-0 h-fit flex flex-row gap-[8px] justify-start items-center"
                 >
-                  <svg
-                    data-pencil-name="Add Context"
-                    data-icon-name="plus"
-                    data-icon-set="lucide"
-                    viewBox="0 0 13.99993896484375 14"
-                    preserveAspectRatio="xMidYMid meet"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="box-border w-[15px] shrink-0 h-[15px]"
+                  <button
+                    type="button"
+                    onClick={onCreateMandateClick}
+                    title="Create Structured Financial Mandate"
+                    className="p-1 rounded text-[#475569] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors"
                   >
-                    <path
-                      d="M6.90088 2.35156q-0.0957 0.01367-0.17432 0.05127-0.0752 0.03418-0.15381 0.12647-0.0752 0.08887-0.11279 0.16748-0.03418 0.0752-0.03418 0.32812l0 3.40088-3.66748 0-0.08545 0.04102q-0.22217 0.11279-0.30078 0.33838-0.0752 0.22217 0.00684 0.43408 0.05811 0.0957 0.14013 0.18115 0.08545 0.08203 0.16748 0.11963 0.08545 0.03418 0.33838 0.03418l3.40088 0 0 3.40088q0 0.25293 0.03418 0.33838 0.0376 0.08203 0.11963 0.16748 0.08545 0.08203 0.18799 0.1333 0.10596 0.04785 0.23242 0.04785 0.12646 0 0.229-0.04785 0.10596-0.05127 0.18799-0.1333 0.08545-0.08545 0.11963-0.16748 0.0376-0.08545 0.0376-0.33838l0-3.40088 3.40088 0q0.25293 0 0.33496-0.03418 0.08545-0.0376 0.16748-0.11963 0.08545-0.08545 0.1333-0.18799 0.05127-0.10596 0.05127-0.23242 0-0.12646-0.04102-0.23926-0.09912-0.19482-0.29394-0.29394l-0.08545-0.04102-3.66748 0 0-3.38721q0-0.2666-0.02734-0.32128-0.07178-0.19824-0.25293-0.30079-0.18115-0.10596-0.39307-0.06494z"
-                      fill="#475569"
-                    ></path>
-                  </svg>
-                  <svg
-                    data-pencil-name="Element Picker"
-                    data-icon-name="scan"
-                    data-icon-set="lucide"
-                    viewBox="0 0 13.99993896484375 14"
-                    preserveAspectRatio="xMidYMid meet"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="box-border w-[15px] shrink-0 h-[15px]"
+                    <Plus className="w-[15px] h-[15px]" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onSendMessage(
+                        "Verify merchant pricing for Netflix Standard HD plan"
+                      )
+                    }
+                    title="Run Live Playwright CDP Element Inspection"
+                    className="p-1 rounded text-[#475569] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors"
                   >
-                    <path
-                      d="M2.60449 1.20313q-0.43408 0.07178-0.77929 0.35205-0.3418 0.28027-0.50928 0.66992l-0.01367 0.01367q-0.08545 0.21191-0.10596 0.35205-0.02051 0.14014-0.02051 0.75537l0 0.05469q0 0.57422 0 0.69385 0 0.11963 0.03418 0.21191 0.0376 0.08887 0.11963 0.17432 0.18115 0.18115 0.42041 0.18115 0.23926 0 0.40674-0.16748l0.01367-0.01367q0.08203-0.08545 0.10938-0.14014 0.03076-0.05811 0.03076-0.23926 0.01367-0.11279 0.01367-0.54687l0.01367-0.76905 0.04102-0.09912q0.09912-0.2085 0.30761-0.30761l0.09912-0.04102 0.76905-0.01367q0.43408 0 0.54687-0.01367 0.18115 0 0.23584-0.02735 0.05811-0.03076 0.14356-0.11279l0.01367-0.01367q0.16748-0.16748 0.16748-0.40674 0-0.23926-0.16748-0.40674-0.07178-0.06836-0.16748-0.12646l-0.08545-0.04102-0.75537 0q-0.76904 0-0.88184 0.02735z m7.12647-0.00001q-0.18457 0.05811-0.29053 0.21192-0.10254 0.15381-0.10254 0.33496 0 0.23926 0.16748 0.40674l0.01367 0.01367q0.08545 0.08203 0.14014 0.11279 0.05811 0.02734 0.23926 0.02735 0.11279 0.01367 0.54687 0.01367l0.76904 0.01367 0.09913 0.04102q0.2085 0.09912 0.30761 0.30761l0.04102 0.09912 0.01367 0.76905q0 0.43408 0.01367 0.54687 0 0.18115 0.02735 0.23926 0.03076 0.05469 0.11279 0.14014l0.01367 0.01367q0.12647 0.12646 0.30078 0.16064 0.17432 0.03418 0.34522-0.03418 0.0957-0.05811 0.17773-0.14013 0.08545-0.08545 0.11963-0.17432 0.0376-0.09229 0.0376-0.21191 0-0.11963 0-0.69385 0-0.57422-0.00684-0.7041-0.00684-0.1333-0.03418-0.21875-0.25293-0.81348-0.98095-1.14844-0.14014-0.06836-0.28028-0.11279-0.09912-0.02734-0.23242-0.03418-0.12988-0.00684-0.7041-0.00684-0.7998 0-0.85449 0.02734z m-8.08008 8.14844q-0.15381 0.01367-0.27344 0.11963-0.11621 0.10596-0.17432 0.23242-0.02734 0.08203-0.02734 0.20166 0 0.11963 0 0.69385 0 0.57422 0.00684 0.70752 0.00684 0.12988 0.03418 0.21533 0.29395 0.96729 1.26123 1.26123 0.08545 0.02734 0.21533 0.03418 0.1333 0.00684 0.70752 0.00684 0.57422 0 0.69385 0 0.11963 0 0.20849-0.03418 0.09229-0.0376 0.17432-0.11963 0.08545-0.08545 0.1333-0.18799 0.05127-0.10596 0.05127-0.23242 0-0.12646-0.04102-0.23926-0.09912-0.19482-0.29394-0.29394-0.05811-0.02734-0.16406-0.03418-0.10254-0.00684-0.66309-0.01368-0.56055-0.00684-0.68018-0.0205-0.11621-0.01367-0.21533-0.07178-0.14014-0.0957-0.22558-0.26318l-0.04102-0.09913-0.02734-1.34326q0-0.14014-0.02735-0.18457-0.08545-0.18115-0.25976-0.27685-0.17432-0.09912-0.37256-0.05811z m10.5 0q-0.18115 0.02734-0.32129 0.16748-0.08203 0.08545-0.11279 0.15039-0.02734 0.06152-0.02735 0.22901-0.01367 0.12646-0.01367 0.56054l-0.01367 0.75537-0.04102 0.09913q-0.08545 0.16748-0.22558 0.26318-0.09912 0.05811-0.21875 0.07178-0.11621 0.01367-0.67676 0.0205-0.56055 0.00684-0.6665 0.01368-0.10254 0.00684-0.16065 0.03418-0.22217 0.11279-0.30078 0.33838-0.0752 0.22217 0.00684 0.43408 0.05811 0.0957 0.14013 0.18115 0.08545 0.08203 0.17432 0.11963 0.09229 0.03418 0.21191 0.03418 0.11963 0 0.69385 0 0.57422 0 0.7041-0.00684 0.1333-0.00684 0.21875-0.03418 0.96729-0.29395 1.26123-1.26123 0.02734-0.08545 0.03418-0.21533 0.00684-0.1333 0.00684-0.69385l0-0.63232q0-0.19482-0.02051-0.26318-0.02051-0.07178-0.09228-0.15381-0.09912-0.12646-0.2461-0.18116-0.14697-0.05811-0.31445-0.03076z"
-                      fill="#475569"
-                    ></path>
-                  </svg>
-                  <svg
-                    data-pencil-name="Attach File"
-                    data-icon-name="folder"
-                    data-icon-set="lucide"
-                    viewBox="0 0 13.99993896484375 14"
-                    preserveAspectRatio="xMidYMid meet"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="box-border w-[15px] shrink-0 h-[15px]"
+                    <Scan className="w-[15px] h-[15px]" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onSendMessage(
+                        "Scan active credits and discounts for developer tools"
+                      )
+                    }
+                    title="Scan Persona Savings Deals"
+                    className="p-1 rounded text-[#475569] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors"
                   >
-                    <path
-                      d="M1.97559 1.20313q-0.47852 0.09912-0.83741 0.44433-0.35547 0.3418-0.4956 0.80322-0.04102 0.14014-0.04102 0.34864-0.01367 0.2666-0.02734 1.13476l0.01367 6.23096q0.01367 0.61523 0.02734 0.69726 0.14014 0.54688 0.51612 0.90577 0.37939 0.35547 0.9126 0.45459 0.16748 0.02734 4.95605 0.02734 4.78857 0 4.95605-0.02734 0.5332-0.09912 0.91602-0.45459 0.38623-0.35889 0.5127-0.90577 0.01367-0.08203 0.02734-0.5708l0-2.59082q0.01367-3.03857 0-3.20605-0.07178-0.50586-0.34863-0.88184-0.36572-0.4751-0.96729-0.64599l-0.14014-0.04102-5.0415-0.01367-0.0957-0.04102q-0.11279-0.05811-0.1709-0.11279-0.05469-0.05469-0.33496-0.4751-0.22217-0.32471-0.34863-0.47851-0.12646-0.15381-0.25293-0.24951-0.11279-0.08545-0.26661-0.17432-0.15381-0.09229-0.26318-0.11963-0.21191-0.07178-0.43066-0.07861-0.21533-0.00684-1.27832-0.00684l-1.16211 0q-0.23926 0.01367-0.33496 0.02735z m2.88134 1.17578q0.11279 0.05811 0.17432 0.12988 0.06494 0.06836 0.33838 0.4751 0.27344 0.40332 0.44092 0.5708 0.33496 0.33838 0.79638 0.47851l0.14014 0.04102 2.52246 0q2.51904 0.01367 2.57373 0.03418 0.05811 0.02051 0.14014 0.07861 0.08545 0.05469 0.12646 0.09912 0.04102 0.04102 0.08545 0.13672l0.04102 0.09912 0 6.13184-0.04102 0.09912q-0.11279 0.2085-0.32471 0.29394l-0.0957 0.02735-9.5498 0-0.09571-0.02735q-0.21191-0.08545-0.3247-0.29394l-0.04102-0.09912 0-7.88184 0.04102-0.09912q0.05811-0.12646 0.16748-0.21533 0.11279-0.09229 0.25293-0.10596 0.09912-0.01367 1.30224-0.01367l1.22022 0 0.10937 0.04102z"
-                      fill="#475569"
-                    ></path>
-                  </svg>
+                    <Folder className="w-[15px] h-[15px]" />
+                  </button>
                 </div>
+
                 <div
                   data-pencil-name="Right Controls"
                   className="box-border w-fit shrink-0 h-fit flex flex-row gap-[8px] justify-start items-center"
                 >
+                  {/* Model Pill */}
                   <div
                     data-pencil-name="Model Pill"
                     className="box-border w-fit shrink-0 h-fit flex flex-row gap-[4px] p-[4px_8px_4px_7px] justify-start items-center bg-[#E2ECF8] rounded-[10px]"
                   >
-                    <svg
-                      data-pencil-name="Sparkle"
-                      data-icon-name="sparkles"
-                      data-icon-set="lucide"
-                      viewBox="0 0 13.99993896484375 14"
-                      preserveAspectRatio="xMidYMid meet"
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="box-border w-[11px] shrink-0 h-[11px]"
-                    >
-                      <path
-                        d="M6.84619 0.58789q-0.28027 0.04102-0.54687 0.22559-0.29395 0.2085-0.40674 0.57422-0.02734 0.08203-0.3418 1.75683-0.31445 1.67139-0.35889 1.76367-0.04102 0.08887-0.10937 0.16065-0.07178 0.08203-0.15381 0.11279-0.11279 0.04102-0.4751 0.12305l-1.28857 0.23926q-1.68164 0.32129-1.77734 0.34863-0.23926 0.07178-0.44434 0.27002-0.20166 0.19482-0.29395 0.44092-0.08887 0.24268-0.06152 0.50244 0.02734 0.25635 0.16748 0.4956 0.09912 0.16748 0.27344 0.30762 0.17432 0.14014 0.35889 0.19824 0.0957 0.02734 1.76367 0.34863l1.28515 0.25293q0.37939 0.06836 0.50586 0.10938 0.08203 0.04443 0.15381 0.11279 0.05469 0.08545 0.09912 0.16748 0.04102 0.12646 0.10938 0.50586l0.23926 1.24414q0.32129 1.68164 0.34863 1.76367 0.15381 0.46484 0.58789 0.67335 0.2666 0.14014 0.51953 0.14013 0.25293 0 0.51953-0.14013 0.43408-0.2085 0.58789-0.67335 0.02734-0.08203 0.3418-1.74658 0.31445-1.66797 0.3418-1.72265 0.02734-0.11279 0.12646-0.2085 0.09912-0.09912 0.21191-0.14355 0.06836-0.02734 1.73291-0.3418 1.66797-0.31445 1.75-0.3418 0.46484-0.15381 0.67335-0.58789 0.2666-0.51953 0-1.03906-0.09912-0.2085-0.28028-0.36231-0.18115-0.15381-0.39307-0.22558-0.0957-0.02734-1.77734-0.34863l-1.23047-0.23926q-0.37939-0.06836-0.50586-0.10938-0.0957-0.03076-0.15381-0.08545-0.10938-0.11279-0.1538-0.23925-0.02734-0.06836-0.3418-1.73291-0.31445-1.66797-0.3418-1.75-0.14014-0.46484-0.60498-0.68702-0.14014-0.07178-0.31445-0.09912-0.17432-0.02734-0.3418-0.01367z m4.73047 0.01367q-0.12305 0.01367-0.24268 0.09912-0.11963 0.08203-0.1914 0.19483-0.04102 0.08545-0.05469 0.20508-0.01367 0.11621-0.01367 0.35546l0 0.29395-0.36572 0q-0.26318 0.01367-0.32813 0.02051-0.06152 0.00684-0.1333 0.03418-0.2666 0.12646-0.31445 0.42041-0.04785 0.29395 0.14697 0.50586 0.08545 0.08203 0.18115 0.14013 0.08545 0.02734 0.14697 0.03418 0.06494 0.00684 0.31788 0.02051l0.34863 0 0 0.34863q0.01367 0.25293 0.02051 0.31788 0.00683 0.06152 0.03418 0.14697 0.05811 0.0957 0.14013 0.18115 0.21191 0.19482 0.50586 0.14697 0.29395-0.04785 0.42041-0.31445 0.02734-0.08545 0.03418-0.14014 0.00684-0.05811 0.02051-0.32129l0-0.36572 0.29395 0q0.32129 0 0.45458-0.03418 0.1333-0.03418 0.25293-0.15381 0.11963-0.11963 0.15381-0.31445 0.03418-0.19824-0.04785-0.35205-0.04443-0.08203-0.12305-0.15039-0.0752-0.07178-0.1538-0.10596-0.07519-0.0376-0.14014-0.04443-0.06152-0.00684-0.32813-0.02051l-0.3623 0 0-0.34863q0-0.23926-0.00684-0.30762-0.00684-0.07178-0.03418-0.12646-0.08545-0.21191-0.25293-0.30762-0.16748-0.09912-0.37939-0.05811z m-4.26904 2.7583q0.23926 1.26123 0.29394 1.55518 0.05811 0.29395 0.1128 0.42041 0.12646 0.30762 0.38281 0.56738 0.25977 0.25635 0.56738 0.38281 0.12646 0.05469 0.41358 0.1128 0.28711 0.05469 1.54833 0.29394 1.56885 0.29395 1.57569 0.30762 0.00684 0.01367-1.60303 0.31445-1.60986 0.30078-1.72266 0.32813-0.39307 0.09912-0.72119 0.40674-0.32813 0.30762-0.46826 0.70068-0.04443 0.09912-0.09912 0.43408l-0.32129 1.63721q-0.25293 1.37402-0.2666 1.37402-0.01367 0-0.30762-1.55517-0.23926-1.2749-0.29736-1.56202-0.05469-0.28711-0.10938-0.41357-0.09912-0.23584-0.30078-0.46484-0.20166-0.23242-0.41357-0.35889-0.14014-0.09912-0.2666-0.14014-0.16748-0.04102-0.57422-0.12646l-1.28516-0.25293q-1.6543-0.30762-1.64062-0.32129 0.01367-0.01367 1.60986-0.30762l1.51416-0.29394q0.25293-0.05811 0.38965-0.1128 0.29395-0.11279 0.56738-0.37597 0.27344-0.2666 0.3999-0.57422 0.05469-0.12646 0.10938-0.41358 0.05811-0.28711 0.29736-1.56201 0.29395-1.55518 0.30762-1.55517 0.01367 0 0.30762 1.55517z m-5.33203 6.59326q-0.31104 0.07178-0.57764 0.23926-0.26318 0.16748-0.46143 0.42041-0.34863 0.4751-0.34863 1.05615 0 0.58105 0.3418 1.04249 0.34521 0.46143 0.91943 0.6289 0.64258 0.18457 1.25781-0.10937 0.32471-0.15381 0.56055-0.44092 0.23926-0.28711 0.35205-0.65283 0.02734-0.11279 0.03418-0.18116 0.00684-0.06836 0.02051-0.28027 0-0.25293-0.02051-0.3623-0.02051-0.11279-0.10596-0.32471-0.15381-0.36231-0.46826-0.63574-0.31445-0.27344-0.70752-0.38623-0.15381-0.02734-0.3999-0.03418-0.24268-0.00684-0.39648 0.0205z m0.60156 1.18946q0.24951 0.11279 0.31787 0.38623 0.07178 0.27344-0.0957 0.48193-0.12646 0.15381-0.29395 0.21192-0.16748 0.05469-0.33496 0-0.25293-0.07178-0.37939-0.33497-0.04102-0.09912-0.03418-0.23242 0.00684-0.1333 0.04785-0.23242 0.09912-0.22217 0.32129-0.29736 0.22559-0.07861 0.45117 0.01709z"
-                        fill="#334155"
-                      ></path>
-                    </svg>
+                    <Sparkles className="w-[11px] h-[11px] text-[#334155]" />
                     <div
                       data-pencil-name="Model Name"
-                      className="text-[10.5px]/[normal] box-border text-[#1E293B] font-[Inter,system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
+                      className="text-[10.5px] box-border text-[#1E293B] font-semibold text-left select-none"
                     >
-                      GPT-6 Luna · High
+                      Gemini 3.8 Flash
                     </div>
                   </div>
-                  <div
+
+                  {/* Send Button */}
+                  <button
+                    type="submit"
+                    disabled={!chatInput.trim() && !isChatLoading}
                     data-pencil-name="Send Button"
-                    className="box-border w-[24px] shrink-0 h-[24px] flex flex-row gap-0 justify-center items-center bg-[#181A1F] rounded-[12px]"
+                    className={`box-border w-[26px] shrink-0 h-[26px] flex flex-row gap-0 justify-center items-center rounded-[13px] transition-all ${
+                      chatInput.trim() && !isChatLoading
+                        ? "bg-[#181A1F] text-white hover:bg-black shadow-xs cursor-pointer"
+                        : "bg-[#94A3B8] text-white/80 cursor-not-allowed opacity-60"
+                    }`}
                   >
-                    <svg
-                      data-pencil-name="Arrow Up"
-                      data-icon-name="arrow-up"
-                      data-icon-set="lucide"
-                      viewBox="0 0 13.99993896484375 14"
-                      preserveAspectRatio="xMidYMid meet"
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="box-border w-[13px] shrink-0 h-[13px]"
-                    >
-                      <path
-                        d="M6.84619 2.35156q-0.08545 0.01367-0.15723 0.06494-0.06836 0.04785-2.16699 2.14649l-1.66455 1.69531q-0.36572 0.3623-0.46484 0.50244-0.05469 0.08545-0.05469 0.19824l0 0.04102q0 0.23926 0.18115 0.42041 0.11279 0.11279 0.28028 0.14697 0.16748 0.03418 0.32129-0.02051 0.08545-0.02734 0.32128-0.25976 0.23926-0.23242 1.37403-1.36377 1.58252-1.58252 1.59619-1.58252 0.01367 0 0.01367 3.42822l0 3.01123q0 0.44775 0.03418 0.53321 0.0376 0.08203 0.11963 0.16748 0.08545 0.08203 0.18799 0.1333 0.10596 0.04785 0.23242 0.04785 0.12646 0 0.229-0.04785 0.10596-0.05127 0.18799-0.1333 0.08545-0.08545 0.11963-0.16748 0.0376-0.08545 0.0376-0.53321l0-3.01123q0-3.42822 0.01367-3.42822 0.01367 0 1.59619 1.58252 1.13477 1.13135 1.37061 1.36377 0.23926 0.23242 0.32471 0.25976 0.15381 0.05469 0.32128 0.02051 0.16748-0.03418 0.28028-0.14697 0.18115-0.18115 0.18115-0.42041l0-0.04102q0-0.11279-0.05469-0.19824-0.09912-0.14014-0.46484-0.51611l-1.67822-1.68164q-2.10205-2.1123-2.17041-2.14649-0.06836-0.0376-0.16065-0.06494-0.09229-0.02734-0.14014-0.02734-0.04785 0-0.14697 0.02734z"
-                        fill="#FFFFFF"
-                      ></path>
-                    </svg>
-                  </div>
+                    {isChatLoading ? (
+                      <Loader2 className="w-[13px] h-[13px] animate-spin text-white" />
+                    ) : (
+                      <ArrowUp className="w-[13px] h-[13px] text-white stroke-[2.5]" />
+                    )}
+                  </button>
                 </div>
               </div>
-            </div>
+            </form>
           </div>
         </div>
+
+        {/* Optional Split-Screen WorkSurface (Triggered via "Split view") */}
+        {isSplitView && (
+          <div className="flex-1 h-full min-w-[420px] rounded-[12px] border border-[#C8DDF8] overflow-hidden bg-white shadow-xs">
+            <WorkSurface
+              mandates={mandates}
+              transactions={transactions}
+              auditLogs={auditLogs}
+              onTriggerMandate={onTriggerMandate}
+              onViewReceipt={onViewReceipt}
+              onCreateMandateClick={onCreateMandateClick}
+              onDeployPlanMandate={onDeployPlanMandate}
+              approvalRequest={approvalRequest}
+              onApproveApproval={onApproveApproval}
+              onRejectApproval={onRejectApproval}
+              onRefreshData={onRefreshData}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

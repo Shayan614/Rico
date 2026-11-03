@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { FileText, Shield, Sparkles, CheckCircle2 } from "lucide-react";
+import { FileText } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AuditLog } from "@/components/dashboard/FinancialDashboard";
 

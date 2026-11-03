@@ -11,6 +11,18 @@ import { StreamEvent, ChatContext, ThoughtStep } from "./types";
 import { posthogServer } from "@/lib/telemetry/posthog-server";
 import { personaSavingsOptimizer } from "@/lib/savings";
 
+export function stripStars(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/^(\s*)\*+(\s*)/gm, "$1- $2")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/^(\s*)\*+\s*/gm, "$1")
+    .replace(/\s*\*+\s*$/gm, "")
+    .replace(/^\*+/, "")
+    .replace(/\*+$/, "");
+}
+
 export class GeminiAgentClient {
   private client: GoogleGenAI | null = null;
   private modelName: string;
@@ -203,7 +215,7 @@ export class GeminiAgentClient {
 
     yield {
       type: "done",
-      text: fullText,
+      text: stripStars(fullText),
     };
   }
 
@@ -219,8 +231,27 @@ export class GeminiAgentClient {
     userMessage: string,
     context?: ChatContext
   ): AsyncGenerator<StreamEvent> {
-    const textLower = userMessage.toLowerCase();
+    const textLower = userMessage.toLowerCase().trim();
     const isStrictMode = !!context?.strictMode;
+
+    // Handle conversational greetings or generic help
+    if (
+      textLower === "hi" ||
+      textLower === "hello" ||
+      textLower === "hey" ||
+      textLower === "help" ||
+      textLower.startsWith("hi ") ||
+      textLower.startsWith("hello ")
+    ) {
+      const greetingMsg = `Hello! I am Rico, your autonomous financial assistant. I can help you manage recurring expenses, subscriptions, and financial purchases.\n\nWhat can I do for you today? For example, you can tell me to:\n- "Pay Netflix $15.99 on the 5th, max $20"\n- "Check the price of Spotify Premium"\n- "Compare prices for streaming services"\n- "Show me my active mandates"`;
+
+      for (const word of greetingMsg.split(" ")) {
+        yield { type: "token", text: word + " " };
+        await delay(15);
+      }
+      yield { type: "done", text: greetingMsg };
+      return;
+    }
 
     // Detect target merchant / service
     let service = "Merchant Service";

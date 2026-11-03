@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { CheckSquare, Plus, Check, Clock, ExternalLink, X } from "lucide-react";
+import React from "react";
+import { CheckSquare, Plus, Check } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Mandate } from "@/components/dashboard/FinancialDashboard";
 
@@ -20,8 +20,6 @@ export function ZephiumTasksModal({
   onTriggerMandate,
   onCreateMandate,
 }: ZephiumTasksModalProps) {
-  const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
-
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl bg-neutral-900 border-neutral-800 text-neutral-100 p-0 overflow-hidden shadow-2xl">

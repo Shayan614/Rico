@@ -3,10 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { ZephiumCleanHome } from "@/components/zephium/ZephiumCleanHome";
 import { Mandate, Transaction, AuditLog } from "@/components/dashboard/FinancialDashboard";
-import { ReceiptDialog, ReceiptData } from "@/components/dashboard/ReceiptDialog";
-import { ApprovalDialog, ApprovalRequest } from "@/components/dashboard/ApprovalDialog";
-import { CreateMandateDialog } from "@/components/dashboard/CreateMandateDialog";
-import { QuickCommandLauncher } from "@/components/dashboard/QuickCommandLauncher";
+import { ReceiptData } from "@/components/dashboard/ReceiptDialog";
+import { ApprovalRequest } from "@/components/dashboard/ApprovalDialog";
 import { usePayAgentChat, ChatMessage } from "@/lib/chat/use-payagent-chat";
 import {
   trackMandateTriggered,
@@ -19,9 +17,6 @@ import {
 const INITIAL_MESSAGES: ChatMessage[] = [];
 
 export default function Home() {
-  const [splitMode, setSplitMode] = useState<"split" | "chat" | "dashboard">(
-    "split"
-  );
   const [strictMode, setStrictMode] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptData | null>(
     null
@@ -39,7 +34,6 @@ export default function Home() {
       }
     | undefined
   >(undefined);
-  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
 
   // Global Keyboard Shortcut: ⌘K / Ctrl+K Quick Command Launcher
   useEffect(() => {
@@ -265,7 +259,6 @@ export default function Home() {
     setInput,
     sendMessage,
     isLoading,
-    stop,
     clearChat,
     setMessages,
   } = usePayAgentChat({
@@ -362,12 +355,12 @@ export default function Home() {
       id: `msg-app-${Date.now()}`,
       sender: "assistant",
       text: isBackupCard
-        ? `Manual approval confirmed for **${req.service}**. Payment of **$${req.detectedPrice.toFixed(
+        ? `Manual approval confirmed for ${req.service}. Payment of $${req.detectedPrice.toFixed(
             2
-          )} ${req.currency}** successfully re-routed to your vaulted backup **Visa Debit (•••• 4242)** via PayPal Vault Bridge.`
-        : `Manual approval confirmed for **${req.service}**. Payment of **$${req.detectedPrice.toFixed(
+          )} ${req.currency} successfully re-routed to your vaulted backup Visa Debit (•••• 4242) via PayPal Vault Bridge.`
+        : `Manual approval confirmed for ${req.service}. Payment of $${req.detectedPrice.toFixed(
             2
-          )} ${req.currency}** successfully executed via PayPal Sandbox Wallet.`,
+          )} ${req.currency} successfully executed via PayPal Sandbox Wallet.`,
       timestamp: new Date().toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
@@ -463,9 +456,9 @@ export default function Home() {
     const planNoticeMsg: ChatMessage = {
       id: `msg-plan-${Date.now()}`,
       sender: "assistant",
-      text: `Locked in **${service} — ${planName}** via the **Zephium Calm Pricing Lens** at an honest transparent rate of **$${price.toFixed(
+      text: `Locked in ${service} — ${planName} via the Zephium Calm Pricing Lens at an honest transparent rate of $${price.toFixed(
         2
-      )}/mo** (dark patterns stripped).\n\nConfiguring autonomous mandate with a safe budget ceiling of **$${ceilingBuffer} USD**.`,
+      )}/mo (dark patterns stripped).\n\nConfiguring autonomous mandate with a safe budget ceiling of $${ceilingBuffer} USD.`,
       timestamp: new Date().toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
@@ -576,6 +569,9 @@ export default function Home() {
       setSelectedReceipt={setSelectedReceipt}
       onDeployPlanMandate={handleDeployPlanMandate}
       onCreateMandateSubmit={handleCreateMandate}
+      isCommandOpen={isCommandOpen}
+      setIsCommandOpen={setIsCommandOpen}
+      onRefreshData={fetchDashboardData}
     />
   );
 }

@@ -9,16 +9,9 @@ import {
   FileText,
   Plus,
   X,
-  CreditCard,
-  ShieldCheck,
-  ShieldAlert,
-  ChevronDown,
-  ExternalLink,
   Bot,
   Layers,
-  Settings,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 export interface ZephiumTab {
   id: string;

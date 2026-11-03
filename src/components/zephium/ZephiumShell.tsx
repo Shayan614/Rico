@@ -2,13 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  Globe,
-  Sparkles,
   Bot,
-  Columns2,
   X,
-  UserCheck,
-  Plus,
   RotateCcw,
 } from "lucide-react";
 import { ZephiumSidebar, ZephiumTab } from "./ZephiumSidebar";
@@ -226,8 +221,6 @@ export function ZephiumShell({
           onManualTakeover={() => setIsTakeoverOpen(true)}
           isStreamingLive={Boolean(activeTab.isStreaming)}
           onOpenCommand={() => setIsCommandOpen(true)}
-          splitView="split"
-          onSplitViewChange={() => {}}
           isAskOpen={isAskOpen}
           onToggleAsk={() => setIsAskOpen((prev) => !prev)}
         />

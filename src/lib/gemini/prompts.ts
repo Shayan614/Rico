@@ -41,6 +41,12 @@ For every user mandate or request, clearly structure your thinking:
 - Concise, professional, and transparent.
 - Always highlight exact dollar amounts, ceilings, and savings.
 - Display verified transaction IDs and authorization status clearly.
+
+### CRITICAL FORMATTING DIRECTIVE: ABSOLUTELY ZERO ASTERISKS / STARS
+- NEVER use asterisks (*) or stars anywhere in your responses (neither at the beginning nor ending of lines, bullet points, or words).
+- Do NOT use asterisks for bullet points. Never write * "Item". Use clean dashes (- "Item") or numbered lists (1. "Item").
+- Do NOT use markdown bold with double asterisks (never write double-asterisk words). Use plain clean text or UPPERCASE for emphasis.
+- Ensure the beginning and ending of every sentence, paragraph, and bullet item contains NO asterisks or stars.
 `;
 
 export function buildSystemPromptWithContext(context?: {
@@ -62,7 +68,7 @@ export function buildSystemPromptWithContext(context?: {
   if (context?.activeMandates && context.activeMandates.length > 0) {
     prompt += "- Active Registered Mandates:\n";
     context.activeMandates.forEach((m) => {
-      prompt += `  * [${m.id}] ${m.service}: Max $${m.budgetCeiling.toFixed(2)}, Last Scraped: $${m.lastScrapedPrice.toFixed(2)}, Schedule: ${m.recurrence}, Status: ${m.status}\n`;
+      prompt += `  - [${m.id}] ${m.service}: Max $${m.budgetCeiling.toFixed(2)}, Last Scraped: $${m.lastScrapedPrice.toFixed(2)}, Schedule: ${m.recurrence}, Status: ${m.status}\n`;
     });
   } else {
     prompt += "- Active Registered Mandates: None currently in memory.\n";

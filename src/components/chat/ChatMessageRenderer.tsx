@@ -16,11 +16,28 @@ import { ChatMessage } from "@/lib/chat/use-payagent-chat";
 import { ReceiptData } from "@/components/dashboard/ReceiptDialog";
 import { BrowserStepIndicator } from "./BrowserStepIndicator";
 import { GenerativeReceiptCard } from "./GenerativeReceiptCard";
+import { SavingsAdvisoryCard } from "@/components/dashboard/SavingsAdvisoryCard";
 
 interface ChatMessageRendererProps {
   message: ChatMessage;
   onViewReceipt: (receipt: ReceiptData) => void;
   isExpandedDefault?: boolean;
+}
+
+export function formatCleanText(text: string): string {
+  if (!text) return "";
+  return text
+    // Replace bullet points starting with asterisks with clean dashes
+    .replace(/^(\s*)\*+(\s*)/gm, "$1- $2")
+    // Remove bold/italic markdown asterisks around text: **text** -> text, *text* -> text
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    // Remove any remaining stray leading or trailing asterisks on each line
+    .replace(/^(\s*)\*+\s*/gm, "$1")
+    .replace(/\s*\*+\s*$/gm, "")
+    // Remove any leading or trailing asterisks across the entire string
+    .replace(/^\*+/, "")
+    .replace(/\*+$/, "");
 }
 
 export function ChatMessageRenderer({
@@ -31,9 +48,11 @@ export function ChatMessageRenderer({
   const [isExpanded, setIsExpanded] = useState<boolean>(isExpandedDefault);
   const [copiedText, setCopiedText] = useState<boolean>(false);
 
+  const cleanBody = formatCleanText(message.text);
+
   const handleCopyText = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(message.text);
+      navigator.clipboard.writeText(cleanBody);
       setCopiedText(true);
       setTimeout(() => setCopiedText(false), 2000);
     }
@@ -44,7 +63,7 @@ export function ChatMessageRenderer({
       <div className="flex justify-end items-end gap-2 group">
         <div className="space-y-1 max-w-[85%] sm:max-w-[75%]">
           <div className="rounded-2xl rounded-tr-sm bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 px-4 py-2.5 text-xs sm:text-sm shadow-sm leading-relaxed transition-colors">
-            <p className="whitespace-pre-wrap">{message.text}</p>
+            <p className="whitespace-pre-wrap">{cleanBody}</p>
           </div>
           <div className="text-[10px] text-neutral-400 dark:text-neutral-500 text-right px-1">
             {message.timestamp}
@@ -126,7 +145,7 @@ export function ChatMessageRenderer({
         {/* Text Body */}
         {message.text && (
           <div className="text-neutral-800 dark:text-neutral-200 whitespace-pre-wrap leading-relaxed">
-            {message.text}
+            {cleanBody}
           </div>
         )}
 
@@ -136,6 +155,11 @@ export function ChatMessageRenderer({
             receipt={message.receipt}
             onViewReceipt={onViewReceipt}
           />
+        )}
+
+        {/* Savings Advisory Card */}
+        {message.savingsAdvisory && (
+          <SavingsAdvisoryCard advisory={message.savingsAdvisory} />
         )}
 
         {/* Footer info: Timestamp and copy button */}

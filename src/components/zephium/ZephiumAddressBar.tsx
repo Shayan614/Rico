@@ -9,40 +9,29 @@ import {
   Sparkles,
   UserCheck,
   Search,
-  Columns2,
-  PanelLeft,
   PanelRight,
-  Shield,
-  Layers,
-  ExternalLink,
 } from "lucide-react";
 
 interface ZephiumAddressBarProps {
   url: string;
-  onNavigate?: (url: string) => void;
   onRefresh?: () => void;
   isCalmActive: boolean;
   onToggleCalm: () => void;
   onManualTakeover: () => void;
   isStreamingLive: boolean;
   onOpenCommand: () => void;
-  splitView: "split" | "browse" | "work";
-  onSplitViewChange: (view: "split" | "browse" | "work") => void;
   isAskOpen: boolean;
   onToggleAsk: () => void;
 }
 
 export function ZephiumAddressBar({
   url,
-  onNavigate,
   onRefresh,
   isCalmActive,
   onToggleCalm,
   onManualTakeover,
   isStreamingLive,
   onOpenCommand,
-  splitView,
-  onSplitViewChange,
   isAskOpen,
   onToggleAsk,
 }: ZephiumAddressBarProps) {

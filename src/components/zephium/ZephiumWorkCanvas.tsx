@@ -4,18 +4,9 @@ import React, { useState } from "react";
 import {
   Sparkles,
   Bot,
-  CheckCircle2,
-  AlertCircle,
-  ExternalLink,
   CreditCard,
-  ShieldCheck,
-  TrendingDown,
-  Layers,
   ArrowRight,
   Plus,
-  Play,
-  RotateCw,
-  Search,
 } from "lucide-react";
 import { Mandate, Transaction, AuditLog } from "@/components/dashboard/FinancialDashboard";
 import { ReceiptData } from "@/components/dashboard/ReceiptDialog";
@@ -89,7 +80,6 @@ interface ZephiumWorkCanvasProps {
   onCreateMandateClick: () => void;
   onDeployPlanMandate?: (service: string, price: number, planName: string) => void;
   onSwitchToBrowseWithUrl?: (url: string) => void;
-  onSelectHelperBot?: (botName: string) => void;
 }
 
 export function ZephiumWorkCanvas({
@@ -101,7 +91,6 @@ export function ZephiumWorkCanvas({
   onCreateMandateClick,
   onDeployPlanMandate,
   onSwitchToBrowseWithUrl,
-  onSelectHelperBot,
 }: ZephiumWorkCanvasProps) {
   const [activeCanvasTab, setActiveCanvasTab] = useState<
     "overview" | "mandates" | "transactions" | "savings" | "sentinel"
