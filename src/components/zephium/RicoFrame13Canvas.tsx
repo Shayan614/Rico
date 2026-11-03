@@ -245,23 +245,32 @@ export function RicoFrame13Canvas({
               <button
                 type="button"
                 onClick={onClearChat}
-                className="box-border w-fit shrink-0 h-fit flex flex-row gap-[4px] p-[3px_8px_3px_7px] justify-start items-center bg-[#C6DCFA] hover:bg-[#B3D2F8] rounded-[7px] text-[#0F172A] text-[10.5px] font-semibold transition-colors shadow-2xs"
+                className="box-border w-fit shrink-0 h-fit flex flex-row gap-[4px] p-[3px_8px] justify-start items-center bg-[#D6E8FD] hover:bg-[#C6DCFA] rounded-[7px] text-[#475569] hover:text-[#0F172A] text-[10.5px] font-medium transition-colors"
+                title="Start a new chat conversation"
               >
-                <Plus className="w-[11px] h-[11px]" />
-                <span>New</span>
+                <RotateCcw className="w-[11px] h-[11px]" />
+                <span>New Chat</span>
               </button>
             </div>
 
             {/* Spending Rules Group */}
             <div
               data-pencil-name="Today Group"
-              className="box-border w-full h-fit shrink-0 flex flex-col gap-[4px] p-[4px_0px_0px_0px] justify-start items-start"
+              className="box-border w-full h-fit shrink-0 flex flex-col gap-[6px] p-[4px_0px_0px_0px] justify-start items-start"
             >
-              <div
-                data-pencil-name="Group Label"
-                className="text-[10.5px]/[normal] box-border text-[#52637A] font-semibold text-left"
-              >
-                Spending Rules
+              <div className="flex items-center justify-between w-full pr-1">
+                <span className="text-[10.5px] text-[#52637A] font-semibold">
+                  Spending Rules
+                </span>
+                <button
+                  type="button"
+                  onClick={onCreateMandateClick}
+                  className="box-border w-fit shrink-0 h-fit flex flex-row gap-[3px] p-[2.5px_7px] justify-start items-center bg-[#C6DCFA] hover:bg-[#B3D2F8] text-[#0F172A] rounded-[6px] text-[10px] font-semibold transition-all shadow-2xs hover:shadow-xs cursor-pointer active:scale-95"
+                  title="Add New Spending Rule"
+                >
+                  <Plus className="w-[11px] h-[11px]" />
+                  <span>Add Rule</span>
+                </button>
               </div>
 
               {mandates.slice(0, 3).map((mandate, idx) => {
@@ -589,7 +598,7 @@ export function RicoFrame13Canvas({
                     type="button"
                     onClick={onCreateMandateClick}
                     title="Create New Spending Rule"
-                    className="p-1 rounded text-[#475569] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors"
+                    className="p-1 rounded text-[#475569] hover:text-blue-600 hover:bg-[#E2EEFD] transition-colors cursor-pointer"
                   >
                     <Plus className="w-[15px] h-[15px]" />
                   </button>
