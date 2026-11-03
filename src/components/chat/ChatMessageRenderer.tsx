@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import {
   User,
-  Bot,
   ChevronDown,
   ChevronRight,
   CheckCircle2,
@@ -79,9 +78,9 @@ export function ChatMessageRenderer({
   // Assistant message
   return (
     <div className="flex items-start gap-3 group">
-      {/* Bot Avatar */}
-      <div className="w-6 h-6 rounded-lg bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5 shadow-xs">
-        <Bot className="w-3.5 h-3.5" />
+      {/* RICO AI Avatar */}
+      <div className="w-6 h-6 rounded-lg bg-[#CFE3FC] border border-[#BFD7F7] flex items-center justify-center shrink-0 mt-0.5 shadow-2xs overflow-hidden">
+        <div className="w-4 h-4 bg-[url('/brand-rico-mark-transparent.png')] bg-no-repeat bg-contain bg-center" />
       </div>
 
       <div className="flex-1 space-y-3 overflow-hidden text-xs sm:text-sm leading-relaxed">

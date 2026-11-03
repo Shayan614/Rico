@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import React, { useState, useEffect } from "react";
 import { ZephiumCleanHome } from "@/components/zephium/ZephiumCleanHome";
 import { Mandate, Transaction, AuditLog } from "@/components/dashboard/FinancialDashboard";
