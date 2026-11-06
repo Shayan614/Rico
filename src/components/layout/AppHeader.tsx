@@ -11,9 +11,12 @@ import {
   ShieldCheck,
   ShieldAlert,
   Search,
+  User,
+  LogOut,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/lib/auth/AuthContext";
 
 interface AppHeaderProps {
   splitMode: "split" | "chat" | "dashboard";
@@ -39,6 +42,7 @@ export function AppHeader({
   onOpenCommandPalette,
 }: AppHeaderProps) {
   const { theme, setTheme, resolvedTheme } = useTheme();
+  const { user, isAuthenticated, demoLogin, logout } = useAuth();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -192,6 +196,43 @@ export function AppHeader({
             <Moon className="w-3.5 h-3.5 text-neutral-600" />
           )}
         </button>
+
+        {/* User Session / 1-Click Judge Demo Auth */}
+        {isAuthenticated && user ? (
+          <div className="flex items-center gap-1.5 pl-1">
+            <div
+              className="h-7 px-2 rounded-md border border-sky-500/30 bg-sky-500/10 text-sky-800 dark:text-sky-300 flex items-center gap-1.5 text-xs font-medium"
+              title={`Logged in as ${user.email} (${user.role})`}
+            >
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="max-w-[100px] truncate hidden lg:inline">
+                {user.fullName || user.email.split("@")[0]}
+              </span>
+              <span className="text-[10px] uppercase tracking-wider px-1 py-0.2 rounded bg-sky-500/20 text-sky-700 dark:text-sky-300">
+                {user.role}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => logout()}
+              className="h-7 w-7 rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-500 hover:text-red-500 hover:border-red-200 dark:hover:border-red-800 flex items-center justify-center transition-colors"
+              title="Sign Out"
+              aria-label="Sign Out"
+            >
+              <LogOut className="w-3 h-3" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => demoLogin()}
+            className="h-7 px-2.5 text-xs rounded-md bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 font-medium hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors flex items-center gap-1.5 active:scale-95 shadow-xs"
+            title="1-Click Judge Demo Login"
+          >
+            <User className="w-3 h-3" />
+            <span className="hidden sm:inline">Judge Demo</span>
+          </button>
+        )}
       </div>
     </header>
   );

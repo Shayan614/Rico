@@ -16,6 +16,7 @@
     "test:safety": "tsx src/lib/safety/test.ts",
     "test:atomic": "tsx src/lib/safety/atomic-transaction.test.ts",
     "test:deepseek": "tsx src/lib/deepseek/test.ts",
+    "test:auth": "tsx src/lib/auth/test.ts",
     "test:telemetry": "tsx src/lib/telemetry/test.ts",
     "test:sentinel": "tsx src/lib/sentinel/test.ts",
     "test:savings": "tsx src/lib/savings/test.ts"
@@ -23,6 +24,8 @@
   "dependencies": {
     "@ai-sdk/react": "^4.0.163",
     "@google/genai": "^2.32.0",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.119.0",
     "ag-grid-community": "^36.2.0",
     "ag-grid-react": "^36.2.0",
     "ai": "^7.0.159",

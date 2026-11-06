@@ -19,6 +19,21 @@ export interface ReceiptData {
   isCascaded?: boolean;
 }
 
+// 0. Users Table
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  fullName: text("full_name"),
+  avatarUrl: text("avatar_url"),
+  role: text("role").notNull().default("user"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
+});
+
 // 1. Mandates Table
 export const mandates = sqliteTable("mandates", {
   id: text("id").primaryKey(),
@@ -95,6 +110,9 @@ export const auditLogs = sqliteTable("audit_logs", {
 });
 
 // TypeScript Types
+export type UserRecord = InferSelectModel<typeof users>;
+export type NewUserRecord = InferInsertModel<typeof users>;
+
 export type MandateRecord = InferSelectModel<typeof mandates>;
 export type NewMandateRecord = InferInsertModel<typeof mandates>;
 

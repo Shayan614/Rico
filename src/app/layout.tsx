@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { PostHogProvider } from "@/components/telemetry/PostHogProvider";
+import { AuthProvider } from "@/lib/auth/AuthContext";
 
 export const metadata: Metadata = {
   title: "Rico — Autonomous Financial & Agentic Commerce Agent",
@@ -22,7 +23,9 @@ export default function RootLayout({
           enableSystem={false}
           disableTransitionOnChange={false}
         >
-          <PostHogProvider>{children}</PostHogProvider>
+          <PostHogProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </PostHogProvider>
         </ThemeProvider>
       </body>
     </html>
