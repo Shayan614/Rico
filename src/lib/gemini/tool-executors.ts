@@ -1,8 +1,8 @@
-import { db, mandates, transactions, auditLogs, type MandateRecord } from "@/db";
+import { db, mandates, auditLogs, type MandateRecord } from "@/db";
 import { executeMandatePayment, type PayPalReceipt } from "@/lib/paypal";
 import { priceWorker } from "@/lib/browser";
 import { personaSavingsOptimizer } from "@/lib/savings";
-import { eq } from "drizzle-orm";
+import { executeAtomicPaymentTransaction } from "@/lib/safety";
 import {
   MandateToolParams,
   VerifyPriceToolParams,
@@ -167,99 +167,43 @@ export async function executePayPalPayment(params: ExecutePaymentToolParams): Pr
   receipt: PayPalReceipt;
   message: string;
 }> {
-  // 1. Enforce Hard Budget Ceiling Safety Guardrail
-  if (params.verified_price > params.budget_ceiling) {
-    const blockedMsg = `Guardrail Blocked: Verified price ($${params.verified_price.toFixed(
-      2
-    )}) exceeds authorized budget ceiling ($${params.budget_ceiling.toFixed(2)}).`;
+  const tempOrderId = `ORD-${Date.now()}`;
 
-    await db.insert(auditLogs).values({
-      id: generateId("log"),
-      mandateId: params.mandate_id,
-      eventType: "GUARDRAIL_BLOCKED",
-      service: params.service_name,
-      details: blockedMsg,
-      severity: "danger",
-      metadata: {
-        verifiedPrice: params.verified_price,
-        budgetCeiling: params.budget_ceiling,
-      },
-    });
-
-    throw new Error(blockedMsg);
-  }
-
-  // 2. Execute via PayPal SDK / Orders API with Dual-Rail support
-  const { orderId, captureId, receipt } = await executeMandatePayment({
+  // Execute payment wrapped in the Atomic Transaction Wrapper & Double-Billing Guard
+  const atomicResult = await executeAtomicPaymentTransaction({
+    mandateId: params.mandate_id,
+    orderId: tempOrderId,
     serviceName: params.service_name,
-    verifiedPrice: params.verified_price,
+    amount: params.verified_price,
     budgetCeiling: params.budget_ceiling,
     currency: "USD",
-    mandateId: params.mandate_id,
-    fundingRail: params.funding_rail || "AUTO",
-  });
-
-  // 3. Persist transaction to SQLite
-  await db.insert(transactions).values({
-    id: generateId("tx"),
-    mandateId: params.mandate_id || null,
-    orderId,
-    service: params.service_name,
-    amount: params.verified_price,
-    currency: "USD",
-    status: "COMPLETED",
-    receiptData: receipt,
-  });
-
-  // 4. Update lastScrapedPrice in mandate if mandate_id provided
-  if (params.mandate_id) {
-    await db
-      .update(mandates)
-      .set({
-        lastScrapedPrice: params.verified_price,
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(mandates.id, params.mandate_id));
-  }
-
-  // 5. Record successful payment audit log
-  const railLabel =
-    receipt.fundingRail === "VISA"
-      ? `Visa Vault (•••• ${receipt.cardLastFour || "4242"})`
-      : receipt.fundingRail === "MASTERCARD"
-      ? `Mastercard Vault (•••• ${receipt.cardLastFour || "4444"})`
-      : "PayPal Primary";
-
-  await db.insert(auditLogs).values({
-    id: generateId("log"),
-    mandateId: params.mandate_id,
-    eventType: "PAYMENT_CAPTURED",
-    service: params.service_name,
-    details: `Captured order ${orderId} for ${params.service_name}: $${params.verified_price.toFixed(
-      2
-    )} USD via ${railLabel}. Verified below $${params.budget_ceiling.toFixed(2)} ceiling.`,
-    severity: "success",
-    metadata: {
-      orderId,
-      captureId,
-      authCode: receipt.sandboxAuthCode,
-      verifiedPrice: params.verified_price,
-      budgetCeiling: params.budget_ceiling,
-      fundingRail: receipt.fundingRail,
-      cardLastFour: receipt.cardLastFour,
-      routedGateway: receipt.routedGateway,
-      isCascaded: receipt.isCascaded,
+    executePaymentFn: async () => {
+      const res = await executeMandatePayment({
+        serviceName: params.service_name,
+        verifiedPrice: params.verified_price,
+        budgetCeiling: params.budget_ceiling,
+        currency: "USD",
+        mandateId: params.mandate_id,
+        fundingRail: params.funding_rail || "AUTO",
+      });
+      return res;
     },
   });
+
+  if (!atomicResult.success) {
+    throw new Error(atomicResult.message);
+  }
+
+  const receipt = (atomicResult.receiptData as unknown as PayPalReceipt) || null;
+  const orderId = atomicResult.orderId;
+  const captureId = receipt?.captureId || receipt?.sandboxAuthCode || "";
 
   return {
     success: true,
     orderId,
     captureId,
     receipt,
-    message: `Payment of $${params.verified_price.toFixed(2)} captured for ${
-      params.service_name
-    } via ${railLabel} (Order: ${orderId}).`,
+    message: atomicResult.message,
   };
 }
 
