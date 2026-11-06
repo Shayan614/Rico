@@ -1,12 +1,13 @@
 import { RateLimitConfig, RateLimitStatus } from "./types";
 
 interface WindowRecord {
+  id: number;
   timestamp: number;
   tokens: number;
 }
 
 interface QueuedItem {
-  resolve: () => void;
+  resolve: (id: number) => void;
   reject: (err: Error) => void;
   estimatedTokens: number;
 }
@@ -17,6 +18,7 @@ export class DeepSeekRateLimiter {
   private activeRequests: number = 0;
   private queue: QueuedItem[] = [];
   private isProcessingQueue: boolean = false;
+  private nextRecordId: number = 0;
   private readonly windowMs: number = 60000; // 1 minute sliding window
 
   constructor(config?: Partial<RateLimitConfig>) {
@@ -65,9 +67,9 @@ export class DeepSeekRateLimiter {
   }
 
   /**
-   * Wait until rate limit allows the request through
+   * Wait until rate limit allows the request through. Returns a lease record ID.
    */
-  public async acquire(estimatedTokens: number = 500): Promise<void> {
+  public async acquire(estimatedTokens: number = 500): Promise<number> {
     this.pruneWindow();
 
     const status = this.getStatus();
@@ -76,16 +78,18 @@ export class DeepSeekRateLimiter {
     const wouldExceedConcurrency = this.activeRequests >= this.config.maxConcurrentRequests;
 
     if (!wouldExceedRPM && !wouldExceedTPM && !wouldExceedConcurrency) {
+      const recordId = ++this.nextRecordId;
       this.activeRequests++;
       this.windowHistory.push({
+        id: recordId,
         timestamp: Date.now(),
         tokens: estimatedTokens,
       });
-      return;
+      return recordId;
     }
 
     // Must queue request
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<number>((resolve, reject) => {
       this.queue.push({ resolve, reject, estimatedTokens });
       this.scheduleQueueDrain();
     });
@@ -94,14 +98,13 @@ export class DeepSeekRateLimiter {
   /**
    * Release request slot and process queued tasks
    */
-  public release(actualTokensUsed?: number, estimatedTokensClaimed?: number): void {
+  public release(recordId?: number, actualTokensUsed?: number): void {
     this.activeRequests = Math.max(0, this.activeRequests - 1);
 
-    // Adjust token count in latest window history if actual tokens differed
-    if (actualTokensUsed !== undefined && estimatedTokensClaimed !== undefined) {
-      const diff = actualTokensUsed - estimatedTokensClaimed;
-      if (diff !== 0 && this.windowHistory.length > 0) {
-        this.windowHistory[this.windowHistory.length - 1].tokens += diff;
+    if (recordId !== undefined) {
+      const record = this.windowHistory.find((r) => r.id === recordId);
+      if (record && actualTokensUsed !== undefined) {
+        record.tokens = Math.max(0, actualTokensUsed);
       }
     }
 
@@ -143,13 +146,15 @@ export class DeepSeekRateLimiter {
 
       // Dequeue and admit
       this.queue.shift();
+      const recordId = ++this.nextRecordId;
       this.activeRequests++;
       this.windowHistory.push({
+        id: recordId,
         timestamp: Date.now(),
         tokens: next.estimatedTokens,
       });
 
-      next.resolve();
+      next.resolve(recordId);
     }
   }
 
@@ -163,14 +168,14 @@ export class DeepSeekRateLimiter {
     let attempt = 0;
 
     while (attempt <= this.config.maxRetries) {
-      await this.acquire(estimatedTokens);
+      const recordId = await this.acquire(estimatedTokens);
 
       try {
         const result = await fn();
-        this.release(estimatedTokens, estimatedTokens);
+        this.release(recordId, estimatedTokens);
         return result;
       } catch (err: unknown) {
-        this.release(0, estimatedTokens);
+        this.release(recordId, 0);
         attempt++;
 
         const isRateLimited =
