@@ -15,6 +15,7 @@
     "test:browser": "tsx src/lib/browser/test.ts",
     "test:safety": "tsx src/lib/safety/test.ts",
     "test:atomic": "tsx src/lib/safety/atomic-transaction.test.ts",
+    "test:deepseek": "tsx src/lib/deepseek/test.ts",
     "test:telemetry": "tsx src/lib/telemetry/test.ts",
     "test:sentinel": "tsx src/lib/sentinel/test.ts",
     "test:savings": "tsx src/lib/savings/test.ts"
