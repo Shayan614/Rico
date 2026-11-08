@@ -25,7 +25,8 @@
     "test:watchdog": "tsx src/lib/watchdog/test.ts",
     "test:credits": "tsx src/lib/credits/test.ts",
     "test:simulation": "tsx src/lib/simulation/test.ts",
-    "test:mcp": "tsx src/lib/mcp/test.ts"
+    "test:mcp": "tsx src/lib/mcp/test.ts",
+    "test:adapters": "tsx src/lib/mcp/adapters/test.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.163",
