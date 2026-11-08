@@ -274,3 +274,167 @@ export async function handleRemoteAction(params: {
     timestamp,
   };
 }
+
+export interface TelegramCommandResult {
+  replyText: string;
+  replyMarkup?: Record<string, unknown>;
+  command: string;
+}
+
+/**
+ * Handles incoming Telegram Bot chat slash commands:
+ * /start, /help, /status, /mandates, /pending, /audit, /run
+ */
+export async function handleTelegramCommand(
+  rawText: string,
+  chatId?: string | number
+): Promise<TelegramCommandResult> {
+  const text = (rawText || "").trim().toLowerCase();
+  const command = text.split(" ")[0].replace(/@\w+$/, "");
+
+  // 1. /start or /help
+  if (command === "/start" || command === "/help") {
+    const replyText = [
+      `🤖 *Welcome to Rico Sentinel Bot!* (Chat: ${chatId || "direct"})`,
+      `Your 24/7 autonomous financial watchdog for the PayPal AI Hackathon.`,
+      ``,
+      `*Available Commands:*`,
+      `• \`/status\` - View active spending rules & subscription health`,
+      `• \`/pending\` - Check alerts requiring your approval`,
+      `• \`/audit\` - Run a live 24h price audit scan across all merchants right now`,
+      `• \`/help\` - Show this guide`,
+      ``,
+      `*Dual-Rail Execution:*`,
+      `When price changes exceed your budget ceiling, Rico alerts you here with 1-click inline buttons:`,
+      `1. ✅ Approve One-Time (Charges PayPal Orders v2)`,
+      `2. 💳 Pay with Backup Card (Vaulted Visa •••• 4242)`,
+      `3. 🛑 1-Click Cancel (Pauses mandate & prevents billing)`,
+    ].join("\n");
+
+    return {
+      command,
+      replyText,
+    };
+  }
+
+  // 2. /status or /mandates
+  if (command === "/status" || command === "/mandates") {
+    const allMandates = db.select().from(mandates).all();
+
+    if (allMandates.length === 0) {
+      return {
+        command,
+        replyText: `📋 *No Spending Rules Found*\nThere are no active mandates configured in SQLite memory yet.`,
+      };
+    }
+
+    const totalCeiling = allMandates.reduce((sum, m) => sum + m.budgetCeiling, 0);
+    const lines = [
+      `📊 *Rico Active Spending Rules (${allMandates.length} Total)*`,
+      ``,
+    ];
+
+    for (const m of allMandates) {
+      const statusEmoji = m.status === "ACTIVE" ? "🟢" : "⏸️";
+      lines.push(
+        `${statusEmoji} *${m.service}*`,
+        `   • Cap: $${m.budgetCeiling.toFixed(2)} | Last Scraped: $${m.lastScrapedPrice.toFixed(2)}`,
+        `   • Recurrence: ${m.recurrence} | Status: ${m.status}`
+      );
+    }
+
+    lines.push(
+      ``,
+      `💰 *Total Monthly Allocated Budget:* $${totalCeiling.toFixed(2)} USD`,
+      `🔒 *Payment Rails:* Primary PayPal Balance + Vaulted Visa/Mastercard`
+    );
+
+    return {
+      command,
+      replyText: lines.join("\n"),
+    };
+  }
+
+  // 3. /pending
+  if (command === "/pending") {
+    const pendingAlerts = omnichannelAlertStore.getPendingAlerts();
+
+    if (pendingAlerts.length === 0) {
+      return {
+        command,
+        replyText: `✅ *All Subscriptions Within Budget*\nNo price spikes or pending approvals detected right now. Everything is running smoothly!`,
+      };
+    }
+
+    const latest = pendingAlerts[0];
+    const replyText = [
+      `🚨 *Pending Alert Requires Attention*`,
+      ``,
+      `*Service:* ${latest.service}`,
+      `• *Previous Price:* $${latest.oldPrice.toFixed(2)}`,
+      `• *New Scraped Price:* $${latest.newPrice.toFixed(2)} (+${latest.jumpPercent}%)`,
+      `• *Your Budget Limit:* $${latest.budgetCeiling.toFixed(2)}`,
+      ``,
+      `⚠️ _Choose an action to proceed:_`,
+    ].join("\n");
+
+    const replyMarkup = {
+      inline_keyboard: [
+        [
+          {
+            text: `✅ Approve One-Time ($${latest.newPrice.toFixed(2)})`,
+            callback_data: `approve:${latest.mandateId}:${latest.id}:${latest.newPrice.toFixed(2)}`,
+          },
+        ],
+        [
+          {
+            text: `💳 Pay with Backup Card (Visa)`,
+            callback_data: `backup_card:${latest.mandateId}:${latest.id}:${latest.newPrice.toFixed(2)}`,
+          },
+        ],
+        [
+          {
+            text: `🛑 1-Click Cancel Subscription`,
+            callback_data: `cancel:${latest.mandateId}:${latest.id}:0`,
+          },
+        ],
+      ],
+    };
+
+    return {
+      command,
+      replyText,
+      replyMarkup,
+    };
+  }
+
+  // 4. /audit or /run
+  if (command === "/audit" || command === "/run") {
+    const { priceSentinel } = await import("./price-sentinel");
+    const report = await priceSentinel.runAuditCycle({ forceSpike: false });
+
+    const replyText = [
+      `🔍 *Live Price Audit Complete!*`,
+      ``,
+      `• *Audited Services:* ${report.totalAudited}`,
+      `• *Healthy / Normal:* ${report.healthyCount}`,
+      `• *Price Spikes Detected:* ${report.anomaliesDetected}`,
+      `• *Alerts Dispatched:* ${report.alertsDispatched}`,
+      ``,
+      report.anomaliesDetected > 0
+        ? `⚠️ *Action Required:* Price spike alerts have been dispatched with interactive buttons.`
+        : `✅ *All Clear:* All audited services are within authorized spending limits.`,
+    ].join("\n");
+
+    return {
+      command,
+      replyText,
+    };
+  }
+
+  // Default unrecognized command
+  return {
+    command,
+    replyText: `❓ *Unrecognized Command: ${command}*\nType \`/help\` to see available commands or \`/status\` to check spending rules.`,
+  };
+}

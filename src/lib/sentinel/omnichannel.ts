@@ -195,6 +195,144 @@ export class OmnichannelDispatcher {
   }
 
   /**
+   * Edit an existing Telegram message in-place to update alert status
+   * and replace action buttons with a resolution confirmation.
+   */
+  public async editTelegramMessage(
+    chatId: string | number,
+    messageId: number,
+    text: string,
+    replyMarkup?: Record<string, unknown>
+  ): Promise<boolean> {
+    if (!this.telegramToken) {
+      console.log(`[OmnichannelDispatcher] (Simulated Edit Message ${messageId}):`, text);
+      return true;
+    }
+
+    try {
+      const bodyPayload: Record<string, unknown> = {
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        parse_mode: "Markdown",
+      };
+
+      if (replyMarkup) {
+        bodyPayload.reply_markup = replyMarkup;
+      }
+
+      const response = await fetch(
+        `https://api.telegram.org/bot${this.telegramToken}/editMessageText`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(bodyPayload),
+        }
+      );
+      return response.ok;
+    } catch (err) {
+      console.warn("[OmnichannelDispatcher] Telegram editMessageText error:", err);
+      return false;
+    }
+  }
+
+  /**
+   * Send a general text reply to a user in Telegram chat (e.g. for slash commands)
+   */
+  public async sendTelegramTextMessage(
+    chatId: string | number,
+    text: string,
+    replyMarkup?: Record<string, unknown>
+  ): Promise<boolean> {
+    if (!this.telegramToken) {
+      console.log(`[OmnichannelDispatcher] (Simulated Send Message to ${chatId}):`, text);
+      return true;
+    }
+
+    try {
+      const bodyPayload: Record<string, unknown> = {
+        chat_id: chatId,
+        text,
+        parse_mode: "Markdown",
+      };
+
+      if (replyMarkup) {
+        bodyPayload.reply_markup = replyMarkup;
+      }
+
+      const response = await fetch(
+        `https://api.telegram.org/bot${this.telegramToken}/sendMessage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(bodyPayload),
+        }
+      );
+      return response.ok;
+    } catch (err) {
+      console.warn("[OmnichannelDispatcher] Telegram sendMessage error:", err);
+      return false;
+    }
+  }
+
+  /**
+   * Configures the webhook URL with Telegram's setWebhook API
+   */
+  public async setTelegramWebhook(
+    webhookUrl: string,
+    secretToken?: string
+  ): Promise<{ ok: boolean; description?: string }> {
+    if (!this.telegramToken) {
+      return { ok: true, description: "Simulated: No TELEGRAM_BOT_TOKEN set in environment." };
+    }
+
+    try {
+      const bodyPayload: Record<string, unknown> = {
+        url: webhookUrl,
+        allowed_updates: ["message", "callback_query"],
+      };
+
+      if (secretToken) {
+        bodyPayload.secret_token = secretToken;
+      }
+
+      const response = await fetch(
+        `https://api.telegram.org/bot${this.telegramToken}/setWebhook`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(bodyPayload),
+        }
+      );
+
+      const data = await response.json();
+      return { ok: data.ok, description: data.description };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, description: msg };
+    }
+  }
+
+  /**
+   * Retrieves current webhook status from Telegram's getWebhookInfo API
+   */
+  public async getTelegramWebhookInfo(): Promise<Record<string, unknown>> {
+    if (!this.telegramToken) {
+      return { ok: true, simulated: true, status: "Local simulation mode" };
+    }
+
+    try {
+      const response = await fetch(
+        `https://api.telegram.org/bot${this.telegramToken}/getWebhookInfo`
+      );
+      return await response.json();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: msg };
+    }
+  }
+
+  /**
    * Format WhatsApp Cloud Interactive Quick Reply Template Payload
    */
   public formatWhatsAppPayload(alert: OmnichannelAlert): Record<string, unknown> {
