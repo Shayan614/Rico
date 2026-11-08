@@ -574,10 +574,23 @@ export class BatchQueueEngine extends EventEmitter {
     this.registerHandler("INVOICE_OCR", async (data: unknown, ctx) => {
       const payload = (data || {}) as Record<string, unknown>;
       ctx.updateProgress({ percent: 25, message: "Extracting raw image bytes & metadata" });
-      await new Promise((r) => setTimeout(r, 60));
+      await new Promise((r) => setTimeout(r, 30));
 
-      ctx.updateProgress({ percent: 70, message: "Running DeepSeek-V3 OCR line item parsing" });
-      await new Promise((r) => setTimeout(r, 60));
+      ctx.updateProgress({ percent: 60, message: "Running DeepSeek-V3 OCR line item parsing" });
+      await new Promise((r) => setTimeout(r, 30));
+
+      if (payload.content || payload.rawText) {
+        const { invoiceOCRParser } = await import("@/lib/ocr/invoice-ocr-parser");
+        const parsed = await invoiceOCRParser.parseInvoice({
+          id: payload.id as string | undefined,
+          content: (payload.content || payload.rawText) as string,
+          sourceType: payload.sourceType as unknown as import("@/lib/ocr/types").InvoiceSourceType,
+          vendorHint: payload.vendorHint as string | undefined,
+          currencyHint: payload.currencyHint as string | undefined,
+        });
+        ctx.updateProgress({ percent: 100, message: "Invoice validated & tax categorized" });
+        return parsed;
+      }
 
       ctx.updateProgress({ percent: 100, message: "Invoice validated" });
 
