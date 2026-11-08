@@ -608,8 +608,33 @@ export class BatchQueueEngine extends EventEmitter {
     // 3. CONTRACT_WATCHDOG Handler
     this.registerHandler("CONTRACT_WATCHDOG", async (data: unknown, ctx) => {
       const payload = (data || {}) as Record<string, unknown>;
-      ctx.updateProgress({ percent: 40, message: "Auditing SLA & recurring contract clauses" });
-      await new Promise((r) => setTimeout(r, 60));
+      ctx.updateProgress({ percent: 35, message: "Auditing SLA & recurring contract clauses" });
+      await new Promise((r) => setTimeout(r, 20));
+
+      ctx.updateProgress({ percent: 70, message: "Checking 60-day auto-renew windows & zombie seats" });
+      await new Promise((r) => setTimeout(r, 20));
+
+      if (payload.service || payload.renewalDate) {
+        const { watchdogEngine } = await import("@/lib/watchdog/watchdog-engine");
+        const audit = await watchdogEngine.auditContract({
+          id: payload.id as string | undefined,
+          service: (payload.service as string) || "Unknown Enterprise SaaS",
+          vendor: payload.vendor as string | undefined,
+          type: payload.type as unknown as import("@/lib/watchdog/types").SubscriptionType,
+          currentPrice: Number(payload.currentPrice || payload.amount || 250),
+          budgetCeiling: payload.budgetCeiling as number | undefined,
+          currency: payload.currency as string | undefined,
+          renewalDate: (payload.renewalDate as string) || "2026-12-01",
+          noticePeriodDays: payload.noticePeriodDays as number | undefined,
+          totalSeats: payload.totalSeats as number | undefined,
+          activeSeats: payload.activeSeats as number | undefined,
+          costPerSeatUsd: payload.costPerSeatUsd as number | undefined,
+          annualDiscountPercent: payload.annualDiscountPercent as number | undefined,
+          mandateId: payload.mandateId as string | undefined,
+        });
+        ctx.updateProgress({ percent: 100, message: "Contract analysis complete" });
+        return audit;
+      }
 
       ctx.updateProgress({ percent: 100, message: "Contract analysis complete" });
 
