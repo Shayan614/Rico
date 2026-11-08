@@ -60,6 +60,8 @@ export interface StreamEvent {
 
 export interface ChatContext {
   strictMode?: boolean;
+  persona?: string;
+  injectedSkillPrompt?: string;
   activeMandates?: Array<{
     id: string;
     service: string;

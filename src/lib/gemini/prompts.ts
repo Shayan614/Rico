@@ -51,6 +51,8 @@ For every user mandate or request, clearly structure your thinking:
 
 export function buildSystemPromptWithContext(context?: {
   strictMode?: boolean;
+  persona?: string;
+  injectedSkillPrompt?: string;
   activeMandates?: Array<{
     id: string;
     service: string;
@@ -62,7 +64,14 @@ export function buildSystemPromptWithContext(context?: {
 }): string {
   let prompt = PAYAGENT_SYSTEM_PROMPT;
 
+  if (context?.injectedSkillPrompt) {
+    prompt += `\n\n${context.injectedSkillPrompt}\n`;
+  }
+
   prompt += "\n\n### CURRENT SESSION CONTEXT\n";
+  if (context?.persona) {
+    prompt += `- User Persona: ${context.persona.toUpperCase()}\n`;
+  }
   prompt += `- Strict Approval Mode: ${context?.strictMode ? "ENABLED (Always require explicit user confirmation before executing PayPal charge)" : "DISABLED (Autonomous Mode - agent may execute if within budget ceiling)"}\n`;
 
   if (context?.activeMandates && context.activeMandates.length > 0) {

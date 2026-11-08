@@ -10,6 +10,7 @@ import {
 import { StreamEvent, ChatContext, ThoughtStep } from "./types";
 import { posthogServer } from "@/lib/telemetry/posthog-server";
 import { personaSavingsOptimizer } from "@/lib/savings";
+import { skillInjector } from "@/lib/skills";
 
 export function stripStars(text: string): string {
   if (!text) return "";
@@ -65,9 +66,31 @@ export class GeminiAgentClient {
     const startTime = Date.now();
     let totalOutputTokens = 0;
 
+    // Dynamically match and inject domain-specific SKILL.md rules
+    const skillContext = skillInjector.injectSkills(userMessage, {
+      persona: context?.persona,
+    });
+
+    // Notify UI of activated skills
+    for (const skill of skillContext.activeSkills) {
+      yield {
+        type: "step",
+        step: {
+          step: `Activated Skill: ${skill.metadata.name}`,
+          status: "done",
+          detail: `Injected ${skill.metadata.category} domain rules (${skillContext.matchedTriggers.join(", ")})`,
+        },
+      };
+    }
+
+    const enhancedContext: ChatContext = {
+      ...context,
+      injectedSkillPrompt: skillContext.injectedPrompt,
+    };
+
     const stream = isLive && this.client
-      ? this.streamLiveGemini(userMessage, context)
-      : this.streamSimulatedReasoning(userMessage, context);
+      ? this.streamLiveGemini(userMessage, enhancedContext)
+      : this.streamSimulatedReasoning(userMessage, enhancedContext);
 
     try {
       for await (const event of stream) {
@@ -250,6 +273,71 @@ export class GeminiAgentClient {
         await delay(15);
       }
       yield { type: "done", text: greetingMsg };
+      return;
+    }
+
+    // Skill Ingestion Flow 1: Startup Credit & Grant Inquiries
+    if (
+      textLower.includes("startup credit") ||
+      textLower.includes("posthog credit") ||
+      textLower.includes("aws activate") ||
+      textLower.includes("zero burn") ||
+      textLower.includes("founder discount")
+    ) {
+      const probeResult = await personaSavingsOptimizer.probePersonaSavings({
+        serviceName: "PostHog",
+        currentPrice: 120.0,
+        persona: "STARTUP_FOUNDER",
+      });
+      if (probeResult.hasDeals) {
+        yield { type: "savings_advisory", advisory: probeResult as unknown as Record<string, unknown> };
+      }
+      const msg = `Startup Credit Drafter Activated:\n\nBased on your startup profile, I have identified $55,000 in eligible credits:\n- PostHog for Startups: $50,000 credit allocation (12 months free analytics and session replay for companies with under $5M funding)\n- AWS Activate: $5,000 infrastructure credits\n\nI have prepared your application pitch summary matching official vendor acceptance criteria. Would you like me to set your recurring mandate to $0.00 until credits expire?`;
+      for (const word of msg.split(" ")) {
+        yield { type: "token", text: word + " " };
+        await delay(15);
+      }
+      yield { type: "done", text: msg };
+      return;
+    }
+
+    // Skill Ingestion Flow 2: Student 50% Discount Inquiries
+    if (
+      textLower.includes("student discount") ||
+      textLower.includes("college deal") ||
+      textLower.includes("university pricing") ||
+      textLower.includes("edu email")
+    ) {
+      const probeResult = await personaSavingsOptimizer.probePersonaSavings({
+        serviceName: "Spotify",
+        currentPrice: 11.99,
+        persona: "STUDENT",
+      });
+      if (probeResult.hasDeals) {
+        yield { type: "savings_advisory", advisory: probeResult as unknown as Record<string, unknown> };
+      }
+      const msg = `Student Discount Enforcer Activated:\n\nI verified eligible 50% educational discount tiers:\n- Spotify Student: $5.99/mo (normally $11.99/mo, 50% off)\n- Adobe Creative Cloud Student: $19.99/mo (normally $59.99/mo, 67% off)\n- GitHub Student Developer Pack: Free developer tools worth $2,500+\n\nWould you like me to enforce a student spending ceiling rule for your subscriptions?`;
+      for (const word of msg.split(" ")) {
+        yield { type: "token", text: word + " " };
+        await delay(15);
+      }
+      yield { type: "done", text: msg };
+      return;
+    }
+
+    // Skill Ingestion Flow 3: Tax Deduction & Expense Inquiries
+    if (
+      textLower.includes("tax deduction") ||
+      textLower.includes("schedule c") ||
+      textLower.includes("write off") ||
+      textLower.includes("tax write-off")
+    ) {
+      const msg = `Tax Deduction Classifier Activated:\n\nI classified your recent subscriptions and SaaS expenses into IRS Schedule C categories:\n- Software & Cloud: AWS, Supabase, GitHub Copilot (100% Tax Deductible)\n- Office & Productivity: Notion, Zoom, Slack (100% Tax Deductible)\n- Marketing & Analytics: PostHog, Meta Ads (100% Tax Deductible)\n\nEstimated annual tax savings for self-employed/contractor persona: ~$1,420 (assuming 28% blended tax rate). You can export the itemized CSV/PDF ledger directly from the AG Grid dashboard tab.`;
+      for (const word of msg.split(" ")) {
+        yield { type: "token", text: word + " " };
+        await delay(15);
+      }
+      yield { type: "done", text: msg };
       return;
     }
 
