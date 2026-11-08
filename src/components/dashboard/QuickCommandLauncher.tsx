@@ -14,6 +14,7 @@ import {
   Bot,
   Plus,
   Film,
+  Boxes,
 } from "lucide-react";
 import { Mandate, Transaction, AuditLog } from "./FinancialDashboard";
 import { ReceiptData } from "./ReceiptDialog";
@@ -160,6 +161,19 @@ export function QuickCommandLauncher({
           } else {
             onSendMessage("Compare dev tools pricing in parallel");
           }
+          onClose();
+        },
+      },
+      {
+        id: "action-open-app-store",
+        category: "Actions",
+        title: "App Store & MCP Connector Hub",
+        subtitle: "Manage modular SKILL.md skills and connect external MCP servers",
+        icon: <Boxes className="w-4 h-4 text-indigo-400" />,
+        badge: "Extensibility",
+        badgeColor: "bg-indigo-950/80 text-indigo-300 border-indigo-500/40",
+        action: () => {
+          onSendMessage("Show me available financial skills and connected MCP servers in the App Store");
           onClose();
         },
       },

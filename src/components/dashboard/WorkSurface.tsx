@@ -13,6 +13,7 @@ import {
   Monitor,
   Bot,
   Sparkles,
+  Boxes,
 } from "lucide-react";
 import { Mandate, Transaction, AuditLog } from "./FinancialDashboard";
 import { ReceiptData } from "./ReceiptDialog";
@@ -21,6 +22,7 @@ import { AgGridTransactionsTable } from "./AgGridTransactionsTable";
 import { LiveBrowserViewport } from "./LiveBrowserViewport";
 import { PriceSentinelPanel } from "./PriceSentinelPanel";
 import { PersonaSavingsPanel } from "./PersonaSavingsPanel";
+import { AppStorePanel } from "./AppStorePanel";
 import { ApprovalRequest } from "./ApprovalDialog";
 import { useTheme } from "next-themes";
 import { Badge } from "@/components/ui/badge";
@@ -53,7 +55,7 @@ export function WorkSurface({
   onRefreshData,
 }: WorkSurfaceProps) {
   const [activeTab, setActiveTab] = useState<
-    "viewport" | "savings" | "sentinel" | "mandates" | "transactions" | "audit"
+    "viewport" | "savings" | "sentinel" | "skills" | "mandates" | "transactions" | "audit"
   >("viewport");
 
   const { theme, resolvedTheme } = useTheme();
@@ -132,6 +134,22 @@ export function WorkSurface({
             <span>Price Sentinel</span>
             <span className="px-1.5 py-0.2 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-300 text-[9px] font-mono font-bold">
               24/7
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("skills")}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+              activeTab === "skills"
+                ? "bg-white dark:bg-neutral-800 text-indigo-600 dark:text-indigo-400 shadow-xs border border-indigo-500/30"
+                : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+            }`}
+          >
+            <Boxes className="w-3.5 h-3.5 text-indigo-500" />
+            <span>App Store &amp; MCP</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[9px] font-mono font-bold">
+              Hub
             </span>
           </button>
 
@@ -292,6 +310,13 @@ export function WorkSurface({
           <PriceSentinelPanel
             mandates={mandates}
             onRefreshData={onRefreshData}
+          />
+        )}
+
+        {activeTab === "skills" && (
+          <AppStorePanel
+            onRefreshData={onRefreshData}
+            onDeployPlanMandate={onDeployPlanMandate}
           />
         )}
 
