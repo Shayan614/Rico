@@ -651,8 +651,34 @@ export class BatchQueueEngine extends EventEmitter {
     // 4. CREDIT_GRANT_MATCH Handler
     this.registerHandler("CREDIT_GRANT_MATCH", async (data: unknown, ctx) => {
       const payload = (data || {}) as Record<string, unknown>;
-      ctx.updateProgress({ percent: 50, message: "Scanning startup credits matrix" });
-      await new Promise((r) => setTimeout(r, 60));
+      ctx.updateProgress({ percent: 30, message: "Scanning startup credits matrix & grants" });
+      await new Promise((r) => setTimeout(r, 20));
+
+      ctx.updateProgress({ percent: 70, message: "Evaluating eligibility criteria & runway impact" });
+      await new Promise((r) => setTimeout(r, 20));
+
+      if (payload.companyName || payload.fundingStage || payload.techStack) {
+        const { creditMatcherEngine } = await import("@/lib/credits/credit-matcher");
+        const report = await creditMatcherEngine.matchProfile({
+          name: (payload.name as string) || "Founder",
+          companyName: (payload.companyName as string) || "Rico Startup",
+          websiteUrl: payload.websiteUrl as string | undefined,
+          foundedYear: Number(payload.foundedYear || 2025),
+          fundingStage: (payload.fundingStage as unknown as import("@/lib/credits/types").FundingStage) || "SEED",
+          totalFundingRaisedUsd: Number(payload.totalFundingRaisedUsd || 250000),
+          monthlyBurnRateUsd: Number(payload.monthlyBurnRateUsd || 10000),
+          techStack: Array.isArray(payload.techStack) ? payload.techStack : ["Next.js", "TypeScript", "PostgreSQL", "LLM"],
+          productCategory: (payload.productCategory as string) || "AI Agentic Commerce",
+          tagline: (payload.tagline as string) || "Autonomous financial agent for businesses",
+          description: (payload.description as string) || "AI agent with budget ceilings and verified payment receipts.",
+          isStudentFounder: payload.isStudentFounder as boolean | undefined,
+          universityName: payload.universityName as string | undefined,
+          studentEmail: payload.studentEmail as string | undefined,
+        });
+
+        ctx.updateProgress({ percent: 100, message: "Credit grants matched" });
+        return report;
+      }
 
       ctx.updateProgress({ percent: 100, message: "Credit grants matched" });
 

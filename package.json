@@ -22,7 +22,8 @@
     "test:savings": "tsx src/lib/savings/test.ts",
     "test:batch": "tsx src/lib/batch/test.ts",
     "test:ocr": "tsx src/lib/ocr/test.ts",
-    "test:watchdog": "tsx src/lib/watchdog/test.ts"
+    "test:watchdog": "tsx src/lib/watchdog/test.ts",
+    "test:credits": "tsx src/lib/credits/test.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.163",
