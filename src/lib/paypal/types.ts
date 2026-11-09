@@ -18,6 +18,8 @@ export interface PayPalCreateOrderParams {
   description?: string;
   customId?: string;
   fundingRail?: FundingRail | "AUTO";
+  /** Identifies the logical payment and stays the same across retries. */
+  paymentAttemptKey?: string;
 }
 
 export interface PayPalOrderResponse {

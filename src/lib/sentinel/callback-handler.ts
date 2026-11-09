@@ -1,6 +1,8 @@
-import { db, mandates, transactions, auditLogs } from "@/db";
-import { eq } from "drizzle-orm";
+import { db, mandates, auditLogs } from "@/db";
+import { and, eq } from "drizzle-orm";
 import { executeMandatePayment } from "@/lib/paypal";
+import { executeAtomicPaymentTransaction } from "@/lib/safety/atomic-transaction";
+import { mandatePeriodKey } from "@/lib/safety/billing-period";
 import { posthogServer } from "@/lib/telemetry/posthog-server";
 import { omnichannelAlertStore } from "./omnichannel";
 import { RemoteActionResult } from "./types";
@@ -17,44 +19,42 @@ export async function handleRemoteAction(params: {
   action: "approve" | "backup_card" | "cancel";
   mandateId: string;
   alertId?: string;
-  overridePrice?: number;
+  /** The verified user acting. Never taken from the request body. */
+  ownerId: string;
 }): Promise<RemoteActionResult> {
-  const { action, mandateId, alertId, overridePrice } = params;
+  const { action, mandateId, alertId, ownerId } = params;
 
   // 1. Fetch mandate from SQLite database
-  const mandate = db
+  const [mandate] = await db
     .select()
     .from(mandates)
-    .where(eq(mandates.id, mandateId))
-    .get();
+    .where(and(eq(mandates.id, mandateId), eq(mandates.ownerId, ownerId)))
+    .limit(1);
 
   if (!mandate) {
     throw new Error(`Mandate not found with id: ${mandateId}`);
   }
 
   const alert = alertId ? omnichannelAlertStore.getAlert(alertId) : undefined;
-  const executionPrice =
-    overridePrice ??
-    alert?.newPrice ??
-    (mandate.lastScrapedPrice > 0 ? mandate.lastScrapedPrice : mandate.budgetCeiling);
+  // Only server-recorded prices: the alert's, or the price Sentinel stored with the hold.
+  const executionPrice = alert?.newPrice ?? mandate.lastScrapedPrice;
 
   const timestamp = new Date().toISOString();
 
   // 2. Action: 1-Click Cancel Subscription
   if (action === "cancel") {
     // Update mandate status to PAUSED in SQLite
-    db.update(mandates)
+    await db.update(mandates)
       .set({
         status: "PAUSED",
         updatedAt: timestamp,
       })
-      .where(eq(mandates.id, mandateId))
-      .run();
+      .where(and(eq(mandates.id, mandateId), eq(mandates.ownerId, ownerId)));
 
     const logId = generateId("log");
     const detailMsg = `Subscription cancelled & mandate paused via Omnichannel Remote Action (Telegram/WhatsApp). No payment was captured.`;
 
-    db.insert(auditLogs)
+    await db.insert(auditLogs)
       .values({
         id: logId,
         mandateId: mandate.id,
@@ -67,8 +67,7 @@ export async function handleRemoteAction(params: {
           source: "omnichannel_remote_callback",
           alertId,
         },
-      })
-      .run();
+      });
 
     if (alertId) {
       omnichannelAlertStore.resolveAlert(alertId, "cancel");
@@ -86,191 +85,104 @@ export async function handleRemoteAction(params: {
     };
   }
 
-  // 3. Action: Pay with Backup Card (Visa via PayPal Vault)
-  if (action === "backup_card") {
-    const paymentResult = await executeMandatePayment({
-      serviceName: mandate.service,
-      verifiedPrice: executionPrice,
-      budgetCeiling: Math.max(executionPrice, mandate.budgetCeiling),
-      mandateId: mandate.id,
-      fundingRail: "VISA",
-    });
-
-    const txId = generateId("tx");
-    db.insert(transactions)
-      .values({
-        id: txId,
-        mandateId: mandate.id,
-        orderId: paymentResult.orderId,
-        service: mandate.service,
-        amount: executionPrice,
-        currency: mandate.currency || "USD",
-        status: "COMPLETED",
-        receiptData: {
-          ...paymentResult.receipt,
-          fundingRail: "VISA",
-        },
-      })
-      .run();
-
-    // Restore mandate status back to ACTIVE and record verified price
-    db.update(mandates)
-      .set({
-        status: "ACTIVE",
-        lastScrapedPrice: executionPrice,
-        updatedAt: timestamp,
-      })
-      .where(eq(mandates.id, mandateId))
-      .run();
-
-    const logId = generateId("log");
-    const detailMsg = `Remote Payment Approved: Charged $${executionPrice.toFixed(
-      2
-    )} to Vaulted Backup Card (Visa •••• 4242) via PayPal Vault on remote button tap. Mandate restored to ACTIVE.`;
-
-    db.insert(auditLogs)
-      .values({
-        id: logId,
-        mandateId: mandate.id,
-        eventType: "PAYMENT_CAPTURED",
-        service: mandate.service,
-        details: detailMsg,
-        severity: "success",
-        metadata: {
-          action: "backup_card",
-          fundingRail: "VISA",
-          orderId: paymentResult.orderId,
-          captureId: paymentResult.captureId,
-          amount: executionPrice,
-          source: "omnichannel_remote_callback",
-        },
-      })
-      .run();
-
-    await posthogServer.trackPaymentCompleted({
-      service: mandate.service,
-      amount: executionPrice,
-      orderId: paymentResult.orderId,
-      budgetCeiling: Math.max(executionPrice, mandate.budgetCeiling),
-      savingsEnforced: 0,
-      paymentMethod: "Vaulted Backup Card (Visa •••• 4242)",
-    });
-
-    if (alertId) {
-      omnichannelAlertStore.resolveAlert(alertId, "backup_card", {
-        orderId: paymentResult.orderId,
-        transactionId: txId,
-      });
-    }
-
-    return {
-      success: true,
-      action: "backup_card",
-      mandateId,
-      service: mandate.service,
-      alertId,
-      amount: executionPrice,
-      orderId: paymentResult.orderId,
-      captureId: paymentResult.captureId,
-      fundingRail: "VISA",
-      mandateStatus: "ACTIVE",
-      message: `💳 Charged $${executionPrice.toFixed(
-        2
-      )} to backup Visa (PayPal Vault). Mandate for ${mandate.service} is ACTIVE.`,
-      timestamp,
-    };
-  }
-
-  // 4. Action: Approve One-Time (Primary PayPal Sandbox Wallet)
-  const paymentResult = await executeMandatePayment({
-    serviceName: mandate.service,
-    verifiedPrice: executionPrice,
-    budgetCeiling: Math.max(executionPrice, mandate.budgetCeiling),
-    mandateId: mandate.id,
-    fundingRail: "PAYPAL",
+  // 3. Actions: Approve (primary wallet) or Pay with Backup Card (Visa via PayPal Vault)
+  const refuse = (message: string): RemoteActionResult => ({
+    success: false,
+    action,
+    mandateId,
+    service: mandate.service,
+    alertId,
+    mandateStatus: mandate.status,
+    message,
+    timestamp,
   });
 
-  const txId = generateId("tx");
-  db.insert(transactions)
-    .values({
-      id: txId,
-      mandateId: mandate.id,
-      orderId: paymentResult.orderId,
-      service: mandate.service,
-      amount: executionPrice,
-      currency: mandate.currency || "USD",
-      status: "COMPLETED",
-      receiptData: {
-        ...paymentResult.receipt,
-        fundingRail: "PAYPAL",
-      },
-    })
-    .run();
+  if (alertId && (!alert || alert.mandateId !== mandateId)) {
+    return refuse("This alert could not be verified for this mandate. No payment was made.");
+  }
+  if (alert && alert.status !== "PENDING") {
+    return refuse("This alert has already been resolved. No payment was made.");
+  }
+  if (!alert && mandate.status !== "ANOMALY_HOLD") {
+    return refuse("This mandate has no payment awaiting approval. No payment was made.");
+  }
+  if (!(executionPrice > 0)) {
+    return refuse("No verified price is available. No payment was made.");
+  }
 
-  // Restore mandate status back to ACTIVE and record verified price
-  db.update(mandates)
-    .set({
-      status: "ACTIVE",
-      lastScrapedPrice: executionPrice,
-      updatedAt: timestamp,
-    })
-    .where(eq(mandates.id, mandateId))
-    .run();
+  const isBackupCard = action === "backup_card";
+  const fundingRail = isBackupCard ? "VISA" : "PAYPAL";
+  // Both buttons, every alert and every hold share the mandate's billing-period key, so approvals
+  // can never add a second charge for the same period.
+  const idempotencyKey = mandatePeriodKey(mandate);
 
-  const logId = generateId("log");
-  const detailMsg = `Remote Payment Approved: Captured $${executionPrice.toFixed(
-    2
-  )} via PayPal Sandbox Wallet on remote button tap. Mandate restored to ACTIVE.`;
+  const atomicResult = await executeAtomicPaymentTransaction({
+    mandateId: mandate.id,
+    ownerId,
+    orderId: `ORD-${Date.now()}`,
+    idempotencyKey,
+    serviceName: mandate.service,
+    amount: executionPrice,
+    currency: mandate.currency || "USD",
+    budgetCeiling: mandate.budgetCeiling,
+    allowedMandateStatuses: alert ? ["ACTIVE", "ANOMALY_HOLD"] : ["ANOMALY_HOLD"],
+    mandateStatusOnCommit: "ACTIVE",
+    auditDetails: isBackupCard
+      ? `Remote Payment Approved: Charged $${executionPrice.toFixed(
+          2
+        )} to Vaulted Backup Card (Visa •••• 4242) via PayPal Vault on remote button tap. Mandate restored to ACTIVE.`
+      : `Remote Payment Approved: Captured $${executionPrice.toFixed(
+          2
+        )} via PayPal Sandbox Wallet on remote button tap. Mandate restored to ACTIVE.`,
+    auditMetadata: { action, fundingRail, source: "omnichannel_remote_callback", alertId },
+    executePaymentFn: async () => {
+      const payment = await executeMandatePayment({
+        serviceName: mandate.service,
+        verifiedPrice: executionPrice,
+        budgetCeiling: mandate.budgetCeiling,
+        currency: mandate.currency || "USD",
+        mandateId: mandate.id,
+        fundingRail,
+        paymentAttemptKey: idempotencyKey,
+      });
+      return { ...payment, receipt: { ...payment.receipt, fundingRail } };
+    },
+  });
 
-  db.insert(auditLogs)
-    .values({
-      id: logId,
-      mandateId: mandate.id,
-      eventType: "PAYMENT_CAPTURED",
-      service: mandate.service,
-      details: detailMsg,
-      severity: "success",
-      metadata: {
-        action: "approve",
-        fundingRail: "PAYPAL",
-        orderId: paymentResult.orderId,
-        captureId: paymentResult.captureId,
-        amount: executionPrice,
-        source: "omnichannel_remote_callback",
-      },
-    })
-    .run();
+  if (!atomicResult.success) {
+    return refuse(atomicResult.message);
+  }
 
   await posthogServer.trackPaymentCompleted({
     service: mandate.service,
     amount: executionPrice,
-    orderId: paymentResult.orderId,
-    budgetCeiling: Math.max(executionPrice, mandate.budgetCeiling),
+    orderId: atomicResult.orderId,
+    budgetCeiling: mandate.budgetCeiling,
     savingsEnforced: 0,
-    paymentMethod: "PayPal Sandbox MCP Wallet",
+    paymentMethod: isBackupCard ? "Vaulted Backup Card (Visa •••• 4242)" : "PayPal Sandbox MCP Wallet",
   });
 
   if (alertId) {
-    omnichannelAlertStore.resolveAlert(alertId, "approve", {
-      orderId: paymentResult.orderId,
-      transactionId: txId,
+    omnichannelAlertStore.resolveAlert(alertId, action, {
+      orderId: atomicResult.orderId,
+      transactionId: atomicResult.transactionId,
     });
   }
 
   return {
     success: true,
-    action: "approve",
+    action,
     mandateId,
     service: mandate.service,
     alertId,
     amount: executionPrice,
-    orderId: paymentResult.orderId,
-    captureId: paymentResult.captureId,
-    fundingRail: "PAYPAL",
+    orderId: atomicResult.orderId,
+    captureId: atomicResult.captureId,
+    fundingRail,
     mandateStatus: "ACTIVE",
-    message: `✅ Approved! PayPal payment of $${executionPrice.toFixed(
-      2
-    )} captured. Mandate for ${mandate.service} is ACTIVE.`,
+    message: isBackupCard
+      ? `💳 Charged $${executionPrice.toFixed(2)} to backup Visa (PayPal Vault). Mandate for ${mandate.service} is ACTIVE.`
+      : `✅ Approved! PayPal payment of $${executionPrice.toFixed(2)} captured. Mandate for ${mandate.service} is ACTIVE.`,
     timestamp,
   };
 }

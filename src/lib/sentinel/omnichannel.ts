@@ -72,13 +72,15 @@ export class OmnichannelDispatcher {
    */
   public async dispatchAlert(alert: OmnichannelAlert): Promise<{
     telegramSent: boolean;
+    telegramDelivery: "sent" | "simulated" | "failed" | "not_sent";
     whatsappPayload: Record<string, unknown>;
     slackPayload: Record<string, unknown>;
   }> {
     omnichannelAlertStore.saveAlert(alert);
 
-    // 1. Dispatch to Telegram (Live Bot API if credentials set, or high-fidelity simulated response)
-    const telegramSent = await this.sendTelegramAlert(alert);
+    // 1. Dispatch to Telegram. The live chat belongs to one user, so others' alerts never go there.
+    const mayUseChat = !this.telegramToken || alert.ownerId === process.env.TELEGRAM_OWNER_ID;
+    const telegramSent = mayUseChat ? await this.sendTelegramAlert(alert) : false;
 
     // 2. Format WhatsApp Cloud Interactive Template payload
     const whatsappPayload = this.formatWhatsAppPayload(alert);
@@ -86,8 +88,12 @@ export class OmnichannelDispatcher {
     // 3. Format Slack Enterprise Block Kit payload
     const slackPayload = this.formatSlackBlockKitPayload(alert);
 
+    const isLive = Boolean(this.telegramToken && this.telegramChatId);
+    const telegramDelivery = !mayUseChat ? "not_sent" : !telegramSent ? "failed" : isLive ? "sent" : "simulated";
+
     return {
       telegramSent,
+      telegramDelivery,
       whatsappPayload,
       slackPayload,
     };

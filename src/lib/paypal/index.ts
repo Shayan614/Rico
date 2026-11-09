@@ -1,4 +1,5 @@
 export * from "./types";
+export * from "./errors";
 export * from "./oauth";
 export * from "./orders";
 export * from "./mcp-client";
@@ -18,6 +19,7 @@ export async function executeMandatePayment(params: {
   mandateId?: string;
   fundingRail?: FundingRail | "AUTO";
   simulateDeclinePrimary?: boolean;
+  paymentAttemptKey?: string;
 }): Promise<{
   success: boolean;
   orderId: string;
@@ -40,6 +42,7 @@ export async function executeMandatePayment(params: {
     serviceName: params.serviceName,
     mandateId: params.mandateId,
     fundingRail: params.fundingRail || "AUTO",
+    paymentAttemptKey: params.paymentAttemptKey,
   });
 
   // 2. Capture Order with Dual-Rail Vault routing
@@ -49,6 +52,7 @@ export async function executeMandatePayment(params: {
     budgetCeiling: params.budgetCeiling,
     fundingRail: params.fundingRail || "AUTO",
     simulateDeclinePrimary: params.simulateDeclinePrimary,
+    paymentAttemptKey: params.paymentAttemptKey,
   });
 
   return {

@@ -5,10 +5,13 @@ export type SentinelAuditResultStatus =
   | "PRICE_DROP"
   | "PRICE_INCREASE_SAFE"
   | "ANOMALY_SPIKE"
-  | "BUDGET_EXCEEDED";
+  | "BUDGET_EXCEEDED"
+  // The live price could not be read, so nothing is known and the rule was left unchanged.
+  | "UNVERIFIED";
 
 export interface SentinelAuditRecord {
   id: string;
+  ownerId?: string | null;
   mandateId: string;
   service: string;
   oldPrice: number;
@@ -31,13 +34,18 @@ export interface SentinelCycleSummary {
   healthyCount: number;
   anomaliesDetected: number;
   savingsCount: number;
+  unverifiedCount: number;
+  /** Alerts recorded by this run, including simulated ones. */
   alertsDispatched: number;
+  /** Alerts actually accepted by a real messaging service. */
+  alertsDelivered: number;
   audits: SentinelAuditRecord[];
 }
 
 export interface OmnichannelAlert {
   id: string;
   mandateId: string;
+  ownerId?: string | null;
   service: string;
   planName?: string;
   oldPrice: number;

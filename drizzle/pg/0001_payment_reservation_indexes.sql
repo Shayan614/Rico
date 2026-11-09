@@ -1,0 +1,3 @@
+CREATE UNIQUE INDEX "transactions_idempotency_active_uq" ON "transactions" USING btree ("idempotency_key") WHERE "idempotency_key" IS NOT NULL AND "status" IN ('PENDING', 'COMPLETED');--> statement-breakpoint
+CREATE UNIQUE INDEX "transactions_mandate_pending_uq" ON "transactions" USING btree ("mandate_id") WHERE "mandate_id" IS NOT NULL AND "status" = 'PENDING';--> statement-breakpoint
+CREATE UNIQUE INDEX "transactions_order_completed_uq" ON "transactions" USING btree ("order_id") WHERE "status" = 'COMPLETED';

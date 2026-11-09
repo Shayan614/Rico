@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import {
+  createSupabaseUserSession,
+  roleFromSupabaseUser,
+  toPublicSession,
   createUserSession,
   getJudgeDemoSession,
-  serializeSessionToken,
   syncUserToDatabase,
   SESSION_COOKIE_NAME,
   getSessionCookieOptions,
 } from "@/lib/auth/session-bridge";
+import { clearRefreshCookie, setSupabaseSessionCookies } from "@/lib/auth/session-refresh";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -24,7 +27,7 @@ export async function POST(request: Request) {
 
       const response = NextResponse.json({
         success: true,
-        session: demoSession,
+        session: toPublicSession(demoSession),
         user: demoSession.user,
         message: "Judge Evaluator session initialized successfully.",
       });
@@ -34,6 +37,7 @@ export async function POST(request: Request) {
         demoSession.accessToken,
         getSessionCookieOptions()
       );
+      clearRefreshCookie(response);
 
       return response;
     }
@@ -64,30 +68,20 @@ export async function POST(request: Request) {
             email: data.user.email || email,
             fullName: data.user.user_metadata?.full_name || email.split("@")[0],
             avatarUrl: data.user.user_metadata?.avatar_url,
-            role: (data.user.user_metadata?.role as "user" | "admin" | "judge") || "user",
+            role: roleFromSupabaseUser(data.user),
           };
 
           await syncUserToDatabase(authUser);
 
-          const liveSession = {
-            user: authUser,
-            accessToken: data.session.access_token,
-            refreshToken: data.session.refresh_token,
-            expiresAt: data.session.expires_at ? data.session.expires_at * 1000 : Date.now() + 3600000,
-            isSimulated: false,
-          };
+          const liveSession = createSupabaseUserSession(authUser, data.session);
 
           const response = NextResponse.json({
             success: true,
-            session: liveSession,
+            session: toPublicSession(liveSession),
             user: authUser,
           });
 
-          response.cookies.set(
-            SESSION_COOKIE_NAME,
-            serializeSessionToken(liveSession),
-            getSessionCookieOptions()
-          );
+          setSupabaseSessionCookies(response, liveSession, data.session.refresh_token);
 
           return response;
         }
@@ -108,7 +102,7 @@ export async function POST(request: Request) {
 
     const response = NextResponse.json({
       success: true,
-      session,
+      session: toPublicSession(session),
       user: simulatedUser,
       message: "Sandbox authentication session created.",
     });
@@ -118,6 +112,7 @@ export async function POST(request: Request) {
       session.accessToken,
       getSessionCookieOptions()
     );
+    clearRefreshCookie(response);
 
     return response;
   } catch (error: unknown) {

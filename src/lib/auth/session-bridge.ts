@@ -2,8 +2,7 @@ import crypto from "crypto";
 import { AuthUser, UserSession } from "./types";
 import { db, users } from "@/db";
 import { eq } from "drizzle-orm";
-import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { checkSupabaseSession } from "./supabase-verify";
 
 export const SESSION_COOKIE_NAME = "rico_auth_session";
 export const REFRESH_COOKIE_NAME = "rico_auth_refresh";
@@ -13,6 +12,11 @@ const SECRET_KEY =
   process.env.AUTH_SECRET ||
   process.env.SUPABASE_ANON_KEY ||
   "rico-paypal-ai-hackathon-secure-session-bridge-key-2026";
+
+/** A separate 32-byte key per purpose, derived from the session secret. */
+export function deriveAuthKey(purpose: string): Buffer {
+  return crypto.createHash("sha256").update(`rico:${purpose}:${SECRET_KEY}`).digest();
+}
 
 /**
  * Sign a payload with HMAC-SHA256
@@ -32,7 +36,9 @@ function verifyPayload(tokenString: string): UserSession | null {
     const [encodedPayload, signature] = parts;
     const expectedSignature = signPayload(encodedPayload);
 
-    if (signature !== expectedSignature) {
+    const given = Buffer.from(signature);
+    const expected = Buffer.from(expectedSignature);
+    if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) {
       return null;
     }
 
@@ -84,6 +90,33 @@ export function getJudgeDemoSession(): UserSession {
 }
 
 /**
+ * Bridge session for a real Supabase login. It carries Supabase's access token, so every request
+ * can be checked against Supabase, and it expires with that token. The refresh token is kept apart,
+ * in its own encrypted HttpOnly cookie (see session-refresh.ts).
+ */
+export function createSupabaseUserSession(
+  user: AuthUser,
+  supabaseSession: { access_token: string; expires_at?: number }
+): UserSession {
+  return {
+    user,
+    accessToken: supabaseSession.access_token,
+    expiresAt: supabaseSession.expires_at ? supabaseSession.expires_at * 1000 : Date.now() + 3600 * 1000,
+    isSimulated: false,
+  };
+}
+
+/** What the browser may see: never a bearer token, since the cookie is HTTP-only for a reason. */
+export function toPublicSession(session: UserSession): UserSession {
+  return { user: session.user, accessToken: "", expiresAt: session.expiresAt, isSimulated: session.isSimulated };
+}
+
+/** App roles come only from app_metadata, which users cannot edit. user_metadata is user-editable. */
+export function roleFromSupabaseUser(user: { app_metadata?: Record<string, unknown> }): AuthUser["role"] {
+  return user.app_metadata?.role === "admin" ? "admin" : "user";
+}
+
+/**
  * Create a new user session from user profile
  */
 export function createUserSession(user: AuthUser, isSimulated: boolean = true): UserSession {
@@ -99,21 +132,49 @@ export function createUserSession(user: AuthUser, isSimulated: boolean = true): 
   return rawSession;
 }
 
+// Sandbox logins prove nothing about an email, and get a new ID each time. The judge is exempt.
+const isSandboxUserId = (id: string) => /^usr_(?!judge_)/.test(id);
+const sandboxEmail = (id: string) => `${id}@sandbox.invalid`;
+
 /**
- * Persist or synchronize user to local SQLite `users` table
+ * Makes sure this user has exactly one users row, keyed by their ID. Only a Supabase-verified
+ * email is stored; sandbox and unconfirmed users get a placeholder, so nobody can squat an address.
+ * A real account's email is never merged or taken.
+ */
+export async function ensureUserRow(user: AuthUser, emailVerified = !isSandboxUserId(user.id)): Promise<void> {
+  const sandbox = !emailVerified || isSandboxUserId(user.id);
+  const values = {
+    id: user.id,
+    email: sandbox ? sandboxEmail(user.id) : user.email,
+    fullName: user.fullName || "Rico User",
+    avatarUrl: user.avatarUrl || null,
+    role: user.role === "judge" ? "judge" : "user",
+  };
+
+  await db.insert(users).values(values).onConflictDoNothing();
+  const [row] = await db.select({ id: users.id }).from(users).where(eq(users.id, user.id)).limit(1);
+  if (row) return;
+
+  // The email is taken. An older sandbox row gives way; a real account does not.
+  const [holder] = await db.select({ id: users.id }).from(users).where(eq(users.email, values.email)).limit(1);
+  if (holder && isSandboxUserId(holder.id)) {
+    await db.update(users).set({ email: sandboxEmail(holder.id) }).where(eq(users.id, holder.id));
+    await db.insert(users).values(values).onConflictDoNothing();
+    const [claimed] = await db.select({ id: users.id }).from(users).where(eq(users.id, user.id)).limit(1);
+    if (claimed) return;
+  }
+  throw new Error("This email is already linked to another account.");
+}
+
+/**
+ * Persist or synchronize user to the application `users` table
  */
 export async function syncUserToDatabase(user: AuthUser): Promise<void> {
   try {
     const existing = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
 
     if (existing.length === 0) {
-      await db.insert(users).values({
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName || "Rico User",
-        avatarUrl: user.avatarUrl || null,
-        role: user.role || "user",
-      });
+      await ensureUserRow(user);
     } else {
       await db
         .update(users)
@@ -125,7 +186,7 @@ export async function syncUserToDatabase(user: AuthUser): Promise<void> {
         .where(eq(users.id, user.id));
     }
   } catch (err) {
-    console.warn("Failed to sync user to local SQLite database:", err);
+    console.warn("Failed to sync user to the database:", err);
   }
 }
 
@@ -154,43 +215,14 @@ export function getSessionCookieOptions(maxAgeSeconds: number = SESSION_TTL_SECO
  * Server-side session resolver for Next.js App Router (Server Components / Actions)
  */
 export async function getServerSession(): Promise<UserSession | null> {
-  // 1. Try Live Supabase Auth if configured
-  if (isSupabaseConfigured()) {
-    try {
-      const supabase = getSupabaseServerClient();
-      if (supabase) {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (user && user.email) {
-          const authUser: AuthUser = {
-            id: user.id,
-            email: user.email,
-            fullName: user.user_metadata?.full_name || user.email.split("@")[0],
-            avatarUrl: user.user_metadata?.avatar_url,
-            role: (user.user_metadata?.role as "user" | "admin" | "judge") || "user",
-          };
-
-          return {
-            user: authUser,
-            accessToken: "live_supabase_token",
-            expiresAt: Date.now() + 3600 * 1000,
-            isSimulated: false,
-          };
-        }
-      }
-    } catch {
-      // Fall through to cookie bridge
-    }
-  }
-
-  // 2. Read from Next.js server cookie store
   try {
     const { cookies } = await import("next/headers");
     const cookieStore = cookies();
     const cookieValue = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-    return extractSessionFromCookieValue(cookieValue);
+    const session = extractSessionFromCookieValue(cookieValue);
+    // A real user's cookie is only good while their Supabase session is live.
+    if (session && (await checkSupabaseSession(session)) !== "valid") return null;
+    return session;
   } catch {
     return null;
   }

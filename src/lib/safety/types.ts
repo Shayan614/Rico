@@ -13,6 +13,8 @@ export interface DoubleBillingCheckResult {
 
 export interface AtomicPaymentExecutionParams {
   mandateId?: string;
+  /** The verified user paying. Required on the PostgreSQL path whenever a mandate is named. */
+  ownerId?: string;
   orderId: string;
   serviceName: string;
   amount: number;
@@ -22,6 +24,11 @@ export interface AtomicPaymentExecutionParams {
   cooldownSeconds?: number; // default: 300s (5 mins)
   allowDuplicateWithinWindow?: boolean;
   receiptData?: object | null;
+  /** When set, the stored mandate must exist in one of these states and its own ceiling applies. */
+  allowedMandateStatuses?: Array<"ACTIVE" | "PAUSED" | "ANOMALY_HOLD">;
+  mandateStatusOnCommit?: "ACTIVE" | "PAUSED" | "ANOMALY_HOLD";
+  auditDetails?: string;
+  auditMetadata?: Record<string, unknown>;
   /** Custom async payment executor (e.g. PayPal API call). If omitted, receiptData is used */
   executePaymentFn?: () => Promise<{
     orderId: string;
@@ -34,9 +41,12 @@ export interface AtomicPaymentExecutionResult {
   success: boolean;
   transactionId?: string;
   orderId: string;
-  status: "COMPLETED" | "BLOCKED" | "FAILED";
+  /** NEEDS_RECONCILIATION: money moved or may have moved, and the reservation stays PENDING. */
+  status: "COMPLETED" | "BLOCKED" | "FAILED" | "NEEDS_RECONCILIATION";
   message: string;
   receiptData?: object | null;
+  captureId?: string;
+  paymentOutcome?: "CAPTURED" | "UNKNOWN" | "DECLINED";
   rolledBack?: boolean;
   error?: string;
 }

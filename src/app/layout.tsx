@@ -3,6 +3,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { PostHogProvider } from "@/components/telemetry/PostHogProvider";
 import { AuthProvider } from "@/lib/auth/AuthContext";
+import { AuthModal } from "@/components/auth/AuthModal";
 
 export const metadata: Metadata = {
   title: "Rico — Autonomous Financial & Agentic Commerce Agent",
@@ -24,7 +25,10 @@ export default function RootLayout({
           disableTransitionOnChange={false}
         >
           <PostHogProvider>
-            <AuthProvider>{children}</AuthProvider>
+            <AuthProvider>
+              {children}
+              <AuthModal />
+            </AuthProvider>
           </PostHogProvider>
         </ThemeProvider>
       </body>

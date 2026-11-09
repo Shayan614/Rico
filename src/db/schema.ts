@@ -37,6 +37,8 @@ export const users = sqliteTable("users", {
 // 1. Mandates Table
 export const mandates = sqliteTable("mandates", {
   id: text("id").primaryKey(),
+  // Nullable only for legacy rows, which stay visible to nobody until explicitly assigned.
+  ownerId: text("owner_id").references(() => users.id, { onDelete: "restrict" }),
   service: text("service").notNull(),
   budgetCeiling: real("budget_ceiling").notNull(),
   lastScrapedPrice: real("last_scraped_price").notNull().default(0),

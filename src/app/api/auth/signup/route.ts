@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import {
+  createSupabaseUserSession,
+  roleFromSupabaseUser,
+  toPublicSession,
   createUserSession,
   serializeSessionToken,
   syncUserToDatabase,
   SESSION_COOKIE_NAME,
   getSessionCookieOptions,
 } from "@/lib/auth/session-bridge";
+import { clearRefreshCookie, setSupabaseSessionCookies } from "@/lib/auth/session-refresh";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -42,24 +46,33 @@ export async function POST(request: Request) {
             email: data.user.email || email,
             fullName: fullName || email.split("@")[0],
             avatarUrl: "/brand-rico-mark.png",
-            role: "user" as const,
+            role: roleFromSupabaseUser(data.user),
           };
 
-          await syncUserToDatabase(authUser);
-
-          const session = createUserSession(authUser, false);
+          // No Supabase session means the email is unconfirmed (or the address is already
+          // registered): a mock-only session, and no users row with an unverified email.
+          if (data.session) {
+            await syncUserToDatabase(authUser);
+          }
+          const session = data.session
+            ? createSupabaseUserSession(authUser, data.session)
+            : createUserSession(authUser, true);
           const response = NextResponse.json({
             success: true,
-            session,
+            session: toPublicSession(session),
             user: authUser,
-            message: "Account created successfully.",
+            message: data.session
+              ? "Account created successfully."
+              : "Check your email to confirm your account, then sign in.",
+            needsEmailConfirmation: !data.session,
           });
 
-          response.cookies.set(
-            SESSION_COOKIE_NAME,
-            serializeSessionToken(session),
-            getSessionCookieOptions()
-          );
+          if (data.session) {
+            setSupabaseSessionCookies(response, session, data.session.refresh_token);
+          } else {
+            response.cookies.set(SESSION_COOKIE_NAME, serializeSessionToken(session), getSessionCookieOptions());
+            clearRefreshCookie(response);
+          }
 
           return response;
         }
@@ -80,7 +93,7 @@ export async function POST(request: Request) {
 
     const response = NextResponse.json({
       success: true,
-      session,
+      session: toPublicSession(session),
       user: newUser,
       message: "Account created successfully.",
     });
@@ -90,6 +103,7 @@ export async function POST(request: Request) {
       session.accessToken,
       getSessionCookieOptions()
     );
+    clearRefreshCookie(response);
 
     return response;
   } catch (error: unknown) {

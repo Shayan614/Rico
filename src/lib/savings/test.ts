@@ -1,4 +1,4 @@
-import { db, transactions } from "@/db";
+import { db, mandates, transactions, users } from "@/db";
 import { eq } from "drizzle-orm";
 import { personaSavingsOptimizer } from "./savings-engine";
 import { PERSONA_DEALS_MATRIX } from "./deal-matrix";
@@ -88,11 +88,23 @@ async function runPersonaSavingsTests() {
 
   // 5. Test Discounted PayPal Payment Execution via Sandbox MCP
   console.log("\n[Test 5] Executing Discounted PayPal Capture via applySavingsPayment()...");
+  const savingsOwnerId = "usr_savings_test";
+  db.insert(users).values({ id: savingsOwnerId, email: "savings-test@example.test" }).onConflictDoNothing().run();
+  const savingsMandateId = `mandate-savings-${Date.now()}`;
+  db.insert(mandates).values({
+    id: savingsMandateId,
+    ownerId: savingsOwnerId,
+    service: "Spotify Premium Student",
+    budgetCeiling: 15.0,
+    lastScrapedPrice: 11.99,
+    recurrence: "Monthly",
+    nextRun: "Dec 1, 2026",
+  }).run();
   const paymentExecution = await personaSavingsOptimizer.applySavingsPayment({
     serviceName: "Spotify Premium Student",
-    originalPrice: 11.99,
     discountedPrice: 5.99,
-    budgetCeiling: 15.0,
+    mandateId: savingsMandateId,
+    ownerId: savingsOwnerId,
     dealId: "deal-spotify-student",
     fundingRail: "PAYPAL",
   });

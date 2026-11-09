@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ensureOwnerRecord, requireSession } from "@/lib/auth/require-session";
 import { geminiAgent } from "@/lib/gemini";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireSession(req);
+  if (!auth.ok) return auth.response;
+
   try {
+    await ensureOwnerRecord(auth.session);
     const body = await req.json();
     const { message, strictMode, mandates } = body;
 
@@ -20,6 +25,7 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           const generator = geminiAgent.streamResponse(message, {
+            ownerId: auth.session.user.id,
             strictMode,
             activeMandates: mandates,
           });

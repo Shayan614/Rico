@@ -19,7 +19,18 @@
     "test:auth": "tsx src/lib/auth/test.ts",
     "test:telemetry": "tsx src/lib/telemetry/test.ts",
     "test:sentinel": "tsx src/lib/sentinel/test.ts",
-    "test:savings": "tsx src/lib/savings/test.ts"
+    "test:savings": "tsx src/lib/savings/test.ts",
+    "test:paypal-safety": "tsx src/lib/paypal/provider-safety.test.ts",
+    "test:payment-paths": "tsx src/lib/safety/guarded-payment.pg.test.ts",
+    "test:ownership": "tsx src/lib/safety/mandate-ownership.test.ts",
+    "test:supabase-auth": "tsx src/lib/auth/supabase-auth.e2e.test.ts",
+    "test:sentinel-cron": "tsx src/lib/sentinel/sentinel-cron.test.ts",
+    "test:payment-intent": "tsx src/lib/payments/payment-intent.test.ts",
+    "build:auth-test": "node -e \"process.exit(require('child_process').spawnSync(process.execPath,['node_modules/next/dist/bin/next','build'],{stdio:'inherit',env:{...process.env,NEXT_PUBLIC_SUPABASE_URL:'',NEXT_PUBLIC_SUPABASE_ANON_KEY:'',NEXT_PUBLIC_POSTHOG_KEY:''}}).status)\"",
+    "test:postgres-runtime": "tsx src/lib/safety/postgres-runtime.test.ts",
+    "probe:pooler": "tsx --env-file=.env.local src/db/pooler.probe.ts",
+    "test:postgres": "tsx --env-file=.env.local src/db/postgres.smoke.ts",
+    "test:payment-pg": "tsx src/lib/safety/payment-reservation.pg.test.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.163",
@@ -38,6 +49,7 @@
     "next": "14.2.33",
     "next-themes": "^0.4.6",
     "playwright": "^1.64.1",
+    "postgres": "^4.1.0",
     "posthog-js": "^1.444.0",
     "posthog-node": "^5.61.1",
     "radix-ui": "^1.8.1",

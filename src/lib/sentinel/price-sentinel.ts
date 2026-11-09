@@ -1,5 +1,5 @@
 import { db, mandates, auditLogs, MandateRecord } from "@/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { priceWorker } from "@/lib/browser";
 import { checkPriceAnomaly, checkBudgetCeiling } from "@/lib/safety";
 import { posthogServer } from "@/lib/telemetry/posthog-server";
@@ -12,6 +12,23 @@ import {
 
 function generateId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+}
+
+export class SentinelBusyError extends Error {
+  constructor() {
+    super("A Sentinel audit is already running. Try again shortly.");
+  }
+}
+
+export class ForceSpikeNotAllowedError extends Error {
+  constructor() {
+    super("Forced price spikes are only available when PAYPAL_MODE=mock.");
+  }
+}
+
+/** A forced spike writes a made-up price, so it needs an explicit mock mode, never a default. */
+export function isForceSpikeAllowed(): boolean {
+  return (process.env.PAYPAL_MODE || "").trim().toLowerCase() === "mock";
 }
 
 export class PriceSentinelWorker {
@@ -31,11 +48,13 @@ export class PriceSentinelWorker {
     mandateId?: string;
     forceSpike?: boolean;
     service?: string;
+    /** Limits the cycle to this user's mandates. Only the internal scheduler omits it. */
+    ownerId?: string;
   }): Promise<SentinelCycleSummary> {
-    if (this.isRunningAudit) {
-      console.log("[PriceSentinel] Audit cycle already in progress, skipping concurrent run.");
-      if (this.lastSummary) return this.lastSummary;
-    }
+    if (options?.forceSpike && !isForceSpikeAllowed()) throw new ForceSpikeNotAllowedError();
+    const ownerFilter = options?.ownerId ? eq(mandates.ownerId, options.ownerId) : undefined;
+
+    if (this.isRunningAudit) throw new SentinelBusyError();
 
     this.isRunningAudit = true;
     const cycleId = generateId("cycle");
@@ -45,25 +64,25 @@ export class PriceSentinelWorker {
     let healthyCount = 0;
     let anomalies = 0;
     let savings = 0;
+    let unverified = 0;
     let alertsSent = 0;
+    let alertsDelivered = 0;
 
     try {
       // 1. Fetch active mandates from SQLite memory
-      let targetMandates: MandateRecord[] = [];
-      if (options?.mandateId) {
-        const single = db
+      // Only ACTIVE rules are eligible, and a rule with no owner belongs to nobody.
+      const targetMandates: MandateRecord[] = (
+        await db
           .select()
           .from(mandates)
-          .where(eq(mandates.id, options.mandateId))
-          .get();
-        if (single) targetMandates = [single];
-      } else {
-        targetMandates = db
-          .select()
-          .from(mandates)
-          .where(eq(mandates.status, "ACTIVE"))
-          .all();
-      }
+          .where(
+            and(
+              eq(mandates.status, "ACTIVE"),
+              options?.mandateId ? eq(mandates.id, options.mandateId) : undefined,
+              ownerFilter
+            )
+          )
+      ).filter((m) => Boolean(m.ownerId));
 
       console.log(
         `[PriceSentinel] Starting 24h Background Sentinel Audit for ${targetMandates.length} mandate(s)...`
@@ -77,7 +96,8 @@ export class PriceSentinelWorker {
             ? mandate.lastScrapedPrice
             : mandate.budgetCeiling * 0.75; // sensible baseline if first run
 
-        let livePrice: number;
+        let livePrice: number | null = null;
+        let unverifiedReason = "The live price check failed.";
         let planName: string = `${mandate.service} Plan`;
 
         // Check if demo forced spike is requested (e.g. Adobe Creative Cloud spike to $54.99)
@@ -97,11 +117,49 @@ export class PriceSentinelWorker {
               mandate.merchantUrl || undefined,
               { timeoutMs: 6000 }
             );
-            livePrice = scrape.price;
-            planName = scrape.planName;
+            // A cached or built-in price proves nothing about today's price.
+            if (scrape.source === "live_browser" && scrape.price > 0) {
+              livePrice = scrape.price;
+              planName = scrape.planName;
+            } else {
+              unverifiedReason = "No live price could be read from the merchant page.";
+            }
           } catch {
-            livePrice = baselinePrice;
+            // Reported below as unverified, never as a steady price.
           }
+        }
+
+        if (livePrice === null) {
+          unverified++;
+          const unverifiedDetails = `Price could not be verified: ${unverifiedReason} The rule was left unchanged.`;
+          await db.insert(auditLogs).values({
+            id: generateId("log"),
+            mandateId: mandate.id,
+            eventType: "GUARDRAIL_BLOCKED",
+            service: mandate.service,
+            details: `Sentinel: ${unverifiedDetails}`,
+            severity: "warning",
+            metadata: { reason: "PRICE_UNVERIFIED", source: "sentinel_audit" },
+          });
+          const unverifiedRecord: SentinelAuditRecord = {
+            id: auditId,
+            ownerId: mandate.ownerId,
+            mandateId: mandate.id,
+            service: mandate.service,
+            oldPrice: baselinePrice,
+            newPrice: baselinePrice,
+            budgetCeiling: mandate.budgetCeiling,
+            currency: mandate.currency || "USD",
+            status: "UNVERIFIED",
+            percentageDiff: 0,
+            details: unverifiedDetails,
+            alertDispatched: false,
+            timestamp: new Date().toISOString(),
+          };
+          cycleAudits.push(unverifiedRecord);
+          this.auditHistory.unshift(unverifiedRecord);
+          if (this.auditHistory.length > 50) this.auditHistory.pop();
+          continue;
         }
 
         // 3. Anomaly & Safety Evaluation
@@ -115,6 +173,18 @@ export class PriceSentinelWorker {
         let alertId: string | undefined;
 
         if (ceilingCheck.exceeded || anomalyCheck.isAnomaly) {
+          // Conditional on ACTIVE, so a rule paused mid-audit stays paused and an overlapping
+          // audit cannot raise a second alert for the same hold.
+          const held = await db.update(mandates)
+            .set({
+              status: "ANOMALY_HOLD",
+              lastScrapedPrice: livePrice,
+              updatedAt: new Date().toISOString(),
+            })
+            .where(and(eq(mandates.id, mandate.id), eq(mandates.status, "ACTIVE")))
+            .returning({ id: mandates.id });
+          if (held.length === 0) continue;
+
           // Flag Price Spike Anomaly / Budget Exceeded
           status = ceilingCheck.exceeded ? "BUDGET_EXCEEDED" : "ANOMALY_SPIKE";
           diffPercent = anomalyCheck.percentageJump;
@@ -125,18 +195,8 @@ export class PriceSentinelWorker {
           anomalies++;
           this.anomaliesDetected++;
 
-          // Update Mandate status to ANOMALY_HOLD in SQLite
-          db.update(mandates)
-            .set({
-              status: "ANOMALY_HOLD",
-              lastScrapedPrice: livePrice,
-              updatedAt: new Date().toISOString(),
-            })
-            .where(eq(mandates.id, mandate.id))
-            .run();
-
           // Log warning in SQLite audit_logs
-          db.insert(auditLogs)
+          await db.insert(auditLogs)
             .values({
               id: generateId("log"),
               mandateId: mandate.id,
@@ -151,8 +211,7 @@ export class PriceSentinelWorker {
                 diffPercent,
                 source: "sentinel_24h_audit",
               },
-            })
-            .run();
+            });
 
           // Dispatch Telemetry to PostHog
           await posthogServer.trackPriceAnomaly({
@@ -168,6 +227,7 @@ export class PriceSentinelWorker {
           const alertPayload: OmnichannelAlert = {
             id: alertId,
             mandateId: mandate.id,
+            ownerId: mandate.ownerId,
             service: mandate.service,
             planName,
             oldPrice: baselinePrice,
@@ -180,9 +240,10 @@ export class PriceSentinelWorker {
             timestamp: new Date().toISOString(),
           };
 
-          await omnichannelDispatcher.dispatchAlert(alertPayload);
+          const dispatched = await omnichannelDispatcher.dispatchAlert(alertPayload);
           alertDispatched = true;
           alertsSent++;
+          if (dispatched.telegramDelivery === "sent") alertsDelivered++;
         } else if (livePrice < baselinePrice) {
           // Price Drop detected! (Savings)
           status = "PRICE_DROP";
@@ -192,15 +253,14 @@ export class PriceSentinelWorker {
           savings++;
           this.savingsIdentified += savedAmount;
 
-          db.update(mandates)
+          await db.update(mandates)
             .set({
               lastScrapedPrice: livePrice,
               updatedAt: new Date().toISOString(),
             })
-            .where(eq(mandates.id, mandate.id))
-            .run();
+            .where(and(eq(mandates.id, mandate.id), eq(mandates.status, "ACTIVE")));
 
-          db.insert(auditLogs)
+          await db.insert(auditLogs)
             .values({
               id: generateId("log"),
               mandateId: mandate.id,
@@ -213,22 +273,21 @@ export class PriceSentinelWorker {
                 newPrice: livePrice,
                 savings: savedAmount,
               },
-            })
-            .run();
+            });
         } else {
           // Normal within budget
           healthyCount++;
-          db.update(mandates)
+          await db.update(mandates)
             .set({
               lastScrapedPrice: livePrice,
               updatedAt: new Date().toISOString(),
             })
-            .where(eq(mandates.id, mandate.id))
-            .run();
+            .where(and(eq(mandates.id, mandate.id), eq(mandates.status, "ACTIVE")));
         }
 
         const auditRecord: SentinelAuditRecord = {
           id: auditId,
+          ownerId: mandate.ownerId,
           mandateId: mandate.id,
           service: mandate.service,
           oldPrice: baselinePrice,
@@ -258,7 +317,9 @@ export class PriceSentinelWorker {
         healthyCount,
         anomaliesDetected: anomalies,
         savingsCount: savings,
+        unverifiedCount: unverified,
         alertsDispatched: alertsSent,
+        alertsDelivered,
         audits: cycleAudits,
       };
 
@@ -307,10 +368,33 @@ export class PriceSentinelWorker {
   /**
    * Returns live diagnostic stats for the Sentinel
    */
-  public getStats() {
-    return {
+  public getStats(ownerId?: string) {
+    const shared = {
       schedulerActive: this.timer !== null,
       intervalMinutes: Math.round(this.schedulerIntervalMs / (1000 * 60)),
+    };
+    if (ownerId) {
+      // Built only from this user's recent audits, so nothing reveals other users' activity.
+      const audits = this.auditHistory.filter((a) => a.ownerId === ownerId);
+      return {
+        ...shared,
+        totalAuditsRun: audits.length,
+        anomaliesDetected: audits.filter(
+          (a) => a.status === "BUDGET_EXCEEDED" || a.status === "ANOMALY_SPIKE"
+        ).length,
+        savingsIdentified: Number(
+          audits
+            .filter((a) => a.status === "PRICE_DROP")
+            .reduce((total, a) => total + (a.oldPrice - a.newPrice), 0)
+            .toFixed(2)
+        ),
+        lastRunAt: audits[0]?.timestamp || null,
+        lastSummary: null,
+        recentAudits: audits.slice(0, 10),
+      };
+    }
+    return {
+      ...shared,
       totalAuditsRun: this.totalAuditsRun,
       anomaliesDetected: this.anomaliesDetected,
       savingsIdentified: Number(this.savingsIdentified.toFixed(2)),

@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import {
   getJudgeDemoSession,
   createUserSession,
@@ -69,7 +70,8 @@ async function runAuthTests() {
 
   // [Test 5] SQLite Users Table Synchronization
   console.log("\n[Test 5] Testing SQLite User Database Synchronization...");
-  const testUserId = `usr_test_${Date.now()}`;
+  // A Supabase-style ID: sandbox IDs (usr_...) deliberately never store a real email.
+  const testUserId = randomUUID();
   const testUser = {
     id: testUserId,
     email: `founder_${Date.now()}@rico.ai`,

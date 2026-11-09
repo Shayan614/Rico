@@ -2,8 +2,9 @@
 
 export const dynamic = "force-dynamic";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { ZephiumCleanHome } from "@/components/zephium/ZephiumCleanHome";
+import { useAuth } from "@/lib/auth/AuthContext";
 import { Mandate, Transaction, AuditLog } from "@/components/dashboard/FinancialDashboard";
 import { ReceiptData } from "@/components/dashboard/ReceiptDialog";
 import { ApprovalRequest } from "@/components/dashboard/ApprovalDialog";
@@ -50,7 +51,8 @@ export default function Home() {
   }, []);
 
   // Mandates state
-  const [mandates, setMandates] = useState<Mandate[]>([
+  // Sample data for signed-out visitors only. Signed-in users always see their own database rows.
+  const SAMPLE_MANDATES = useRef<Mandate[]>([
     {
       id: "mandate-1",
       service: "Netflix Standard HD",
@@ -87,7 +89,7 @@ export default function Home() {
   ]);
 
   // Transactions state
-  const [transactions, setTransactions] = useState<Transaction[]>([
+  const SAMPLE_TRANSACTIONS = useRef<Transaction[]>([
     {
       id: "tx-1",
       orderId: "ORD-84920491",
@@ -135,7 +137,7 @@ export default function Home() {
   ]);
 
   // Audit Logs state
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([
+  const SAMPLE_AUDIT_LOGS = useRef<AuditLog[]>([
     {
       id: "log-1",
       timestamp: "Oct 31, 2026, 02:45 PM",
@@ -164,32 +166,41 @@ export default function Home() {
     },
   ]);
 
+  const [mandates, setMandates] = useState<Mandate[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+
   const fetchDashboardData = () => {
     fetch("/api/dashboard")
       .then((res) => {
+        if (res.status === 401) return null;
         if (!res.ok) throw new Error("Failed to load dashboard data");
         return res.json();
       })
       .then((data) => {
-        if (data.mandates && data.mandates.length > 0) {
-          setMandates(data.mandates);
+        if (data === null) {
+          // Signed out: show the sample data so the page is not blank.
+          setMandates(SAMPLE_MANDATES.current);
+          setTransactions(SAMPLE_TRANSACTIONS.current);
+          setAuditLogs(SAMPLE_AUDIT_LOGS.current);
+          return;
         }
-        if (data.transactions && data.transactions.length > 0) {
-          setTransactions(data.transactions);
-        }
-        if (data.auditLogs && data.auditLogs.length > 0) {
-          setAuditLogs(data.auditLogs);
-        }
+        // Signed in: the database is the only source, even when it is empty.
+        setMandates(data.mandates ?? []);
+        setTransactions(data.transactions ?? []);
+        setAuditLogs(data.auditLogs ?? []);
       })
       .catch((err) => {
         console.warn("Could not fetch database records, using defaults:", err);
       });
   };
 
-  // Load persistent records from SQLite backend
+  // Load persistent records, and reload them when the signed-in user changes (login without a page reload).
+  const { user: authUser } = useAuth();
+  const authUserId = authUser?.id ?? null;
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [authUserId]);
 
   // PostHog Feature Flag for Strict Approval Mode vs Autonomous Mode
   useEffect(() => {
@@ -207,51 +218,9 @@ export default function Home() {
     }
   }, []);
 
-  const handleReceiptCaptured = (receiptData: ReceiptData) => {
-    const newTx: Transaction = {
-      id: `tx-${Date.now()}`,
-      orderId: receiptData.orderId,
-      service: receiptData.service,
-      amount: receiptData.verifiedPrice,
-      currency: receiptData.currency || "USD",
-      status: "COMPLETED",
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      receiptData,
-    };
-
-    const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      eventType: "PAYMENT_CAPTURED",
-      service: receiptData.service,
-      details: `Autonomous execution: Scraped ${receiptData.service} ($${receiptData.verifiedPrice.toFixed(
-        2
-      )}) verified <= $${receiptData.budgetCeiling.toFixed(
-        2
-      )}. Captured ${receiptData.orderId}.`,
-      severity: "success",
-    };
-
-    setTransactions((prev) => [newTx, ...prev]);
-    setAuditLogs((prev) => [newLog, ...prev]);
-
-    fetch("/api/transactions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newTx),
-    }).catch((e) => console.error(e));
-
-    fetch("/api/audit-logs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newLog),
-    }).catch((e) => console.error(e));
+  // The server records every payment itself, so the browser only refreshes its view.
+  const handleReceiptCaptured = () => {
+    fetchDashboardData();
   };
 
   // Vercel AI SDK chat integration hook
@@ -271,120 +240,95 @@ export default function Home() {
     onApprovalRequired: (req) => setApprovalRequest(req),
   });
 
-  const handleTriggerMandate = (id: string) => {
+  const timeNow = () =>
+    new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+  const postAssistantNote = (text: string, extra: Partial<ChatMessage> = {}) => {
+    setMessages((prev) => [
+      ...prev,
+      { id: `msg-note-${Date.now()}`, sender: "assistant", text, timestamp: timeNow(), ...extra },
+    ]);
+  };
+
+  // Run Now: the server quotes the payment and nothing is charged until the user confirms it.
+  const handleTriggerMandate = async (id: string) => {
     const target = mandates.find((m) => m.id === id);
     if (!target) return;
     trackMandateTriggered(target.id, target.service);
-    sendMessage(`Execute mandate now for ${target.service}`);
+    try {
+      const res = await fetch("/api/payments/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mandateId: id }),
+      });
+      if (res.status === 401) return; // The sign-in prompt opens instead.
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.quote) {
+        postAssistantNote(data.error || `${target.service} could not be prepared for payment. No payment was made.`);
+        return;
+      }
+      const q = data.quote;
+      setApprovalRequest({
+        id: `confirm-${Date.now()}`,
+        service: q.service,
+        detectedPrice: q.amount,
+        budgetCeiling: q.budgetCeiling,
+        currency: q.currency,
+        reason: "Please confirm this payment. Nothing has been charged yet.",
+        confirmToken: q.confirmToken,
+        mandateId: q.mandateId,
+        periodLabel: q.periodLabel,
+      });
+    } catch {
+      postAssistantNote("Could not reach the server. No payment was made.");
+    }
   };
 
-  const handleApprove = (fundingSource: "PAYPAL" | "BACKUP_CARD" = "PAYPAL") => {
+  const handleApprove = async (fundingSource: "PAYPAL" | "BACKUP_CARD" = "PAYPAL") => {
     if (!approvalRequest) return;
     const req = approvalRequest;
+    // Closing first means a second click cannot submit the same confirmation again.
     setApprovalRequest(null);
     trackApprovalDecision(req.service, true, req.detectedPrice);
 
-    const isBackupCard = fundingSource === "BACKUP_CARD";
-    const orderId = isBackupCard
-      ? `ORD-VAULT-${Math.floor(10000000 + Math.random() * 90000000)}`
-      : `ORD-APP-${Math.floor(10000000 + Math.random() * 90000000)}`;
-    const authCode = `AUTH-${Math.floor(1000 + Math.random() * 9000)}`;
+    if (!req.confirmToken) {
+      postAssistantNote(`No payment was made for ${req.service}: this request had no server confirmation. Use Run Now on the rule.`);
+      return;
+    }
 
-    const newReceipt: ReceiptData = {
-      orderId,
-      service: req.service,
-      planName: `${req.service} Approved Plan`,
-      verifiedPrice: req.detectedPrice,
-      budgetCeiling: req.budgetCeiling,
-      currency: req.currency || "USD",
-      paymentMethod: isBackupCard
-        ? "PayPal Vault: Visa Debit (•••• 4242)"
-        : "PayPal Sandbox Wallet (Approved)",
-      status: "COMPLETED",
-      timestamp: new Date().toLocaleString(),
-      payerEmail: "sb-buyer2026@personal.example.com",
-      sandboxAuthCode: authCode,
-    };
-
-    const newTx: Transaction = {
-      id: `tx-app-${Date.now()}`,
-      orderId,
-      service: req.service,
-      amount: req.detectedPrice,
-      currency: req.currency || "USD",
-      status: "COMPLETED",
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      receiptData: newReceipt,
-    };
-
-    const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      eventType: "PAYMENT_CAPTURED",
-      service: req.service,
-      details: isBackupCard
-        ? `User approved routing payment of $${req.detectedPrice.toFixed(
-            2
-          )} for ${req.service} to Backup Card (Visa •••• 4242) via PayPal Vault Tokenization Bridge.`
-        : `User manual approval granted for ${req.service} ($${req.detectedPrice.toFixed(
-            2
-          )}). Order ${orderId} captured via PayPal.`,
-      severity: "success",
-    };
-
-    setTransactions((prev) => [newTx, ...prev]);
-    setAuditLogs((prev) => [newLog, ...prev]);
-
-    fetch("/api/transactions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newTx),
-    }).catch((e) => console.error(e));
-
-    fetch("/api/audit-logs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newLog),
-    }).catch((e) => console.error(e));
-
-    const approvedMsg: ChatMessage = {
-      id: `msg-app-${Date.now()}`,
-      sender: "assistant",
-      text: isBackupCard
-        ? `Manual approval confirmed for ${req.service}. Payment of $${req.detectedPrice.toFixed(
-            2
-          )} ${req.currency} successfully re-routed to your vaulted backup Visa Debit (•••• 4242) via PayPal Vault Bridge.`
-        : `Manual approval confirmed for ${req.service}. Payment of $${req.detectedPrice.toFixed(
-            2
-          )} ${req.currency} successfully executed via PayPal Sandbox Wallet.`,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      thoughtProcess: {
-        summary: isBackupCard ? "Approved via Backup Visa Vault" : "Manual Review Approved",
-        steps: [
-          {
-            step: "Human decision confirmed",
-            status: "done",
-            detail: isBackupCard ? "Re-routed to Visa •••• 4242" : "Authorized via PayPal Primary",
-          },
-          {
-            step: "Executed payment transaction",
-            status: "done",
-            detail: `Order: ${orderId}`,
-          },
-        ],
-      },
-      receipt: newReceipt,
-    };
-    setMessages((prev) => [...prev, approvedMsg]);
+    try {
+      const res = await fetch("/api/payments/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirmToken: req.confirmToken,
+          fundingRail: fundingSource === "BACKUP_CARD" ? "VISA" : "PAYPAL",
+        }),
+      });
+      if (res.status === 401) return; // The sign-in prompt opens instead.
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        postAssistantNote(data.error || `The payment for ${req.service} did not go through.`);
+        fetchDashboardData();
+        return;
+      }
+      postAssistantNote(data.message, {
+        receipt: data.receipt ?? undefined,
+        thoughtProcess: {
+          summary: "Payment Confirmed",
+          steps: [
+            { step: "You confirmed the payment", status: "done", detail: `${req.service} $${req.detectedPrice.toFixed(2)} ${req.currency}` },
+            { step: "Payment recorded by the server", status: "done", detail: `Order: ${data.orderId}` },
+          ],
+        },
+      });
+      fetchDashboardData();
+    } catch {
+      postAssistantNote(`The payment result for ${req.service} is unknown because the server could not be reached. Check your transactions before trying again.`);
+    }
   };
 
   const handleReject = () => {
@@ -392,53 +336,7 @@ export default function Home() {
     const req = approvalRequest;
     setApprovalRequest(null);
     trackApprovalDecision(req.service, false, req.detectedPrice);
-
-    const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      eventType: "GUARDRAIL_BLOCKED",
-      service: req.service,
-      details: `User rejected payment authorization for ${req.service} ($${req.detectedPrice.toFixed(
-        2
-      )}).`,
-      severity: "danger",
-    };
-
-    setAuditLogs((prev) => [newLog, ...prev]);
-    fetch("/api/audit-logs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newLog),
-    }).catch((e) => console.error(e));
-
-    const rejectedMsg: ChatMessage = {
-      id: `msg-rej-${Date.now()}`,
-      sender: "assistant",
-      text: `Execution cancelled by user for ${req.service}. Funds withheld and mandate kept in pause state.`,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      thoughtProcess: {
-        summary: "Manual Review Rejected",
-        steps: [
-          {
-            step: "Human review rejected",
-            status: "done",
-            detail: "Transaction cancelled by user",
-          },
-          {
-            step: "Enforced balance protection",
-            status: "done",
-            detail: "No PayPal funds transferred",
-          },
-        ],
-      },
-    };
-    setMessages((prev) => [...prev, rejectedMsg]);
+    postAssistantNote(`Payment cancelled for ${req.service}. Nothing was charged.`);
   };
 
   const handleDeployPlanMandate = (

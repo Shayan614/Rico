@@ -24,6 +24,73 @@ import { ApprovalRequest } from "@/components/dashboard/ApprovalDialog";
 import { ChatMessage } from "@/lib/chat/use-payagent-chat";
 import { ChatMessageRenderer } from "@/components/chat/ChatMessageRenderer";
 import { WorkSurface } from "@/components/dashboard/WorkSurface";
+import { useAuth } from "@/lib/auth/AuthContext";
+
+/** Profile icon: opens the sign-in modal when signed out, or a small account menu when signed in. */
+function ProfileButton() {
+  const { user, session, isAuthenticated, isLoading, openAuthPrompt, logout } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleClick = () => {
+    if (isLoading) return;
+    if (isAuthenticated) setMenuOpen((open) => !open);
+    else openAuthPrompt();
+  };
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    await logout();
+    // Reload so no data from the previous account stays on screen.
+    window.location.reload();
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={handleClick}
+        title={isAuthenticated && user ? `Signed in as ${user.email}` : "Sign in"}
+        aria-label={isAuthenticated ? "Account menu" : "Sign in"}
+        className={`w-[28px] h-[28px] rounded-full border flex items-center justify-center text-xs font-semibold transition-colors ${
+          isAuthenticated
+            ? "bg-slate-800 border-slate-800 text-white"
+            : "bg-[#BFD7F7] border-[#A7C8F5] text-slate-700 hover:bg-[#A7C8F5]"
+        }`}
+      >
+        {isLoading ? (
+          <Loader2 className="w-[12px] h-[12px] animate-spin" />
+        ) : isAuthenticated && user ? (
+          user.email.charAt(0).toUpperCase()
+        ) : (
+          <User className="w-[14px] h-[14px]" />
+        )}
+      </button>
+      {menuOpen && isAuthenticated && user && (
+        <div className="absolute left-[36px] bottom-0 z-50 w-[230px] rounded-xl border border-[#BFD7F7] bg-[#F4F9FF] p-3 shadow-lg">
+          <p className="text-[11px] text-slate-500">Signed in as</p>
+          <p className="text-sm font-medium text-slate-800 truncate" title={user.email}>
+            {user.email}
+          </p>
+          {session?.isSimulated && (
+            <p className="mt-1.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
+              Demo session: mock payments only
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="mt-3 w-full h-8 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            {loggingOut && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            Log out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export interface RicoFrame13CanvasProps {
   mandates: Mandate[];
@@ -183,12 +250,7 @@ export function RicoFrame13Canvas({
             )}
           </button>
 
-          <div
-            title="Authenticated PayPal Sandbox User: sb-buyer2026@personal.example.com"
-            className="w-[28px] h-[28px] rounded-full bg-[#BFD7F7] border border-[#A7C8F5] flex items-center justify-center text-slate-700 text-xs font-semibold"
-          >
-            <User className="w-[14px] h-[14px]" />
-          </div>
+          <ProfileButton />
         </div>
       </div>
 
@@ -276,32 +338,46 @@ export function RicoFrame13Canvas({
               {mandates.slice(0, 3).map((mandate, idx) => {
                 const isSelected = activeThread === `mandate-${idx}`;
                 return (
-                  <button
+                  <div
                     key={mandate.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveThread(`mandate-${idx}`);
-                      onSendMessage(
-                        `Execute mandate now for ${mandate.service}`
-                      );
-                    }}
-                    className={`box-border w-full h-fit shrink-0 flex flex-col gap-[2px] p-[7px_9px] justify-start items-start rounded-[9px] text-left transition-colors ${
+                    className={`box-border w-full h-fit shrink-0 flex flex-col rounded-[9px] transition-colors ${
                       isSelected
                         ? "bg-[#BBD6F8] shadow-2xs"
                         : "bg-transparent hover:bg-[#C8DDF8]/50"
                     }`}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <span className="text-[11.5px] text-[#0F172A] font-semibold truncate max-w-[150px]">
-                        {mandate.service}
-                      </span>
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    </div>
-                    <div className="text-[10px] text-[#52637A] font-normal">
-                      Cap: ${mandate.budgetCeiling.toFixed(2)} •{" "}
-                      {mandate.recurrence}
-                    </div>
-                  </button>
+                    {/* Selecting a rule only selects it. Paying needs Run now and a confirmation. */}
+                    <button
+                      type="button"
+                      data-testid="sidebar-rule"
+                      onClick={() => setActiveThread(`mandate-${idx}`)}
+                      className="box-border w-full h-fit flex flex-col gap-[2px] p-[7px_9px] justify-start items-start text-left"
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="text-[11.5px] text-[#0F172A] font-semibold truncate max-w-[150px]">
+                          {mandate.service}
+                        </span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      </div>
+                      <div className="text-[10px] text-[#52637A] font-normal">
+                        Cap: ${mandate.budgetCeiling.toFixed(2)} •{" "}
+                        {mandate.recurrence}
+                      </div>
+                    </button>
+                    {isSelected && (
+                      <div className="flex justify-end px-[9px] pb-[7px]">
+                        <button
+                          type="button"
+                          data-testid="sidebar-run-now"
+                          onClick={() => onTriggerMandate(mandate.id)}
+                          className="h-[22px] px-2 rounded-[6px] bg-[#0F172A] text-white text-[10px] font-semibold hover:bg-[#1E293B] active:scale-95 transition-all"
+                          title={`Review and confirm a payment for ${mandate.service}`}
+                        >
+                          Run now
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>

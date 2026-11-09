@@ -1,15 +1,17 @@
 import { GoogleGenAI } from "@google/genai";
+import { and, eq } from "drizzle-orm";
+import { db, mandates } from "@/db";
 import { buildSystemPromptWithContext } from "./prompts";
 import { payAgentTools } from "./tools";
 import {
   dispatchAgentTool,
   executeCreateMandate,
   executeVerifyWebPrice,
-  executePayPalPayment,
 } from "./tool-executors";
 import { StreamEvent, ChatContext, ThoughtStep } from "./types";
 import { posthogServer } from "@/lib/telemetry/posthog-server";
-import { personaSavingsOptimizer } from "@/lib/savings";
+import { classifyChatIntent, detectKnownService } from "./intent";
+import { quoteMandatePayment } from "@/lib/payments/mandate-execution";
 
 export function stripStars(text: string): string {
   if (!text) return "";
@@ -173,11 +175,20 @@ export class GeminiAgentClient {
             };
 
             try {
-              const toolResult = await dispatchAgentTool(toolCall.name, toolCall.args);
-              if (toolResult.receipt) {
+              if (!context?.ownerId) throw new Error("Agent tools require a verified user.");
+              // The model may only act on what the user explicitly asked for.
+              const intent = classifyChatIntent(userMessage);
+              if (toolCall.name === "create_mandate" && intent !== "create") {
+                throw new Error("You didn't ask to create a spending rule, so none was created.");
+              }
+              if (toolCall.name === "execute_paypal_payment" && intent !== "execute") {
+                throw new Error("You didn't ask to run a spending rule, so no payment was prepared.");
+              }
+              const toolResult = await dispatchAgentTool(toolCall.name, toolCall.args, context.ownerId);
+              if (toolResult.quote) {
                 yield {
-                  type: "receipt",
-                  receipt: toolResult.receipt as Record<string, unknown>,
+                  type: "payment_confirmation",
+                  quote: toolResult.quote as Record<string, unknown>,
                 };
               }
               if (toolResult.advisory) {
@@ -253,288 +264,115 @@ export class GeminiAgentClient {
       return;
     }
 
-    // Detect target merchant / service
-    let service = "Merchant Service";
-    let defaultPrice = 14.99;
-    let ceiling = 20.0;
-    let schedule = "Monthly on 1st";
+    const intent = classifyChatIntent(userMessage);
+    const known = detectKnownService(userMessage);
+    const say = async function* (text: string): AsyncGenerator<StreamEvent> {
+      for (const word of text.split(" ")) {
+        yield { type: "token", text: word + " " };
+        await delay(15);
+      }
+      yield { type: "done", text };
+    };
 
-    if (textLower.includes("netflix")) {
-      service = "Netflix Standard HD";
-      defaultPrice = 15.49;
-      ceiling = 20.0;
-      schedule = "Monthly on 5th";
-    } else if (textLower.includes("spotify")) {
-      service = "Spotify Premium";
-      defaultPrice = 11.99;
-      ceiling = 15.0;
-      schedule = "Monthly on 1st";
-    } else if (textLower.includes("aws")) {
-      service = "AWS Cloud Services";
-      defaultPrice = 84.5;
-      ceiling = 120.0;
-      schedule = "Monthly on 28th";
-    } else if (textLower.includes("copilot") || textLower.includes("github")) {
-      service = "GitHub Copilot";
-      defaultPrice = 19.0;
-      ceiling = 25.0;
-      schedule = "Monthly on 15th";
-    } else if (textLower.includes("adobe")) {
-      service = "Adobe Creative Cloud";
-      defaultPrice = 59.99;
-      ceiling = 30.0; // Deliberate guardrail test
-      schedule = "Monthly on 10th";
-    } else if (textLower.includes("posthog")) {
-      service = "PostHog";
-      defaultPrice = 120.0;
-      ceiling = 150.0;
-      schedule = "Monthly on 1st";
-    } else if (textLower.includes("notion")) {
-      service = "Notion";
-      defaultPrice = 10.0;
-      ceiling = 20.0;
-      schedule = "Monthly on 1st";
-    } else if (textLower.includes("chatgpt")) {
-      service = "ChatGPT Plus";
-      defaultPrice = 20.0;
-      ceiling = 25.0;
-      schedule = "Monthly on 1st";
+    // No supported service named: nothing is created, quoted or paid. There is no generic fallback.
+    if (!known) {
+      yield* say(
+        "I couldn't match that to a supported service, so nothing was created or paid. Try naming one, for example: \"Check the price of Spotify Premium\" or \"Create a rule for Netflix, max $20 monthly\"."
+      );
+      return;
     }
+    const service = known.service;
 
-    // Try parsing user price or ceiling numbers from message
-    const dollarMatches = userMessage.match(/\$([0-9]+(?:\.[0-9]{2})?)/g);
-    if (dollarMatches && dollarMatches.length >= 2) {
-      defaultPrice = parseFloat(dollarMatches[0].replace("$", ""));
-      ceiling = parseFloat(dollarMatches[1].replace("$", ""));
-    } else if (dollarMatches && dollarMatches.length === 1) {
-      ceiling = parseFloat(dollarMatches[0].replace("$", ""));
-    }
+    // Parse a stated ceiling ("max $20"); with two amounts the second is the ceiling.
+    const dollarMatches = userMessage.match(/\$([0-9]+(?:\.[0-9]{1,2})?)/g) ?? [];
+    const ceiling = dollarMatches.length > 0
+      ? parseFloat(dollarMatches[dollarMatches.length - 1].replace("$", ""))
+      : known.defaultCeiling;
 
-    const isPriceExceeded = defaultPrice > ceiling;
+    const ownerId = context?.ownerId;
 
-    // Check if this is a mandate creation request only
-    const isCreateMandateOnly =
-      (textLower.includes("create mandate") ||
-        textLower.includes("register mandate") ||
-        textLower.includes("add mandate") ||
-        textLower.includes("new mandate")) &&
-      !textLower.includes("pay now") &&
-      !textLower.includes("execute");
-
-    if (isCreateMandateOnly) {
+    // 1. Explicit request to create a spending rule: creates it, never pays.
+    if (intent === "create") {
+      if (!ownerId) throw new Error("Creating a mandate requires a verified user.");
       const created = await executeCreateMandate({
         service,
         max_amount: ceiling,
-        schedule,
+        schedule: known.schedule,
         strict_mode: isStrictMode,
-      });
-
-      const mandateMsg = `Registered new recurring mandate for ${service}: Max ceiling $${ceiling.toFixed(
-        2
-      )} USD (${schedule}). Persisted into database with status ACTIVE.`;
+      }, ownerId);
 
       await posthogServer.trackMandateCreated({
         mandateId: created.mandate.id,
         service,
         budgetCeiling: ceiling,
-        recurrence: schedule,
+        recurrence: known.schedule,
         strictMode: isStrictMode,
       });
-
-      for (const word of mandateMsg.split(" ")) {
-        yield { type: "token", text: word + " " };
-        await delay(20);
-      }
 
       yield {
         type: "thought",
         thought: {
-          summary: "Mandate Registered",
+          summary: "Spending Rule Created",
           steps: [
-            {
-              step: "Created mandate in persistent memory",
-              status: "done",
-              detail: `Mandate ID: ${created.mandate.id}`,
-            },
-            {
-              step: "Safety budget ceiling configured",
-              status: "done",
-              detail: `Max $${ceiling.toFixed(2)} USD`,
-            },
+            { step: "Created spending rule", status: "done", detail: `Rule ID: ${created.mandate.id}` },
+            { step: "Budget ceiling configured", status: "done", detail: `Max $${ceiling.toFixed(2)} USD` },
           ],
         },
       };
-
-      yield { type: "done", text: mandateMsg };
+      yield* say(
+        `Created a spending rule for ${service}: max $${ceiling.toFixed(2)} USD, ${known.schedule}. No payment was made. Use Run Now on the rule when you want to pay, and you'll be asked to confirm first.`
+      );
       return;
     }
 
-    // Step 1: Interpreting mandate
-    const step1: ThoughtStep = {
-      step: "Interpreted recurring mandate",
-      status: "running",
-      detail: `Rule: ${service}, Ceiling $${ceiling.toFixed(2)} USD, Schedule: ${schedule}`,
-    };
-    yield { type: "step", step: step1 };
-    await delay(120);
+    // 2. Explicit request to run a rule: prepares a quote for confirmation, never pays.
+    if (intent === "execute") {
+      if (!ownerId) throw new Error("Running a spending rule requires a verified user.");
+      const keyword = known.keyword;
+      const owned = (await db
+        .select()
+        .from(mandates)
+        .where(and(eq(mandates.ownerId, ownerId), eq(mandates.status, "ACTIVE"))))
+        .filter((m) => m.service.toLowerCase().includes(keyword) || m.service === service);
+      if (owned.length !== 1) {
+        yield* say(
+          owned.length === 0
+            ? `You don't have an active spending rule for ${service}, so nothing was paid. Create the rule first, then run it.`
+            : `You have more than one active rule matching ${service}. Use Run Now on the one you mean. Nothing was paid.`
+        );
+        return;
+      }
+      const quoted = await quoteMandatePayment(owned[0].id, ownerId);
+      if (!quoted.ok) {
+        yield* say(quoted.message);
+        return;
+      }
+      const q = quoted.quote;
+      yield { type: "payment_confirmation", quote: q as unknown as Record<string, unknown> };
+      yield* say(
+        `Ready to pay ${q.service}: $${q.amount.toFixed(2)} ${q.currency} (ceiling $${q.budgetCeiling.toFixed(2)}, billing period ${q.periodLabel}). Please confirm to proceed. No payment has been made yet.`
+      );
+      return;
+    }
 
-    step1.status = "done";
-    yield { type: "step", step: step1 };
-
-    // Step 2: Browser verification via executeVerifyWebPrice
-    const step2: ThoughtStep = {
+    // 3. Everything else is informational: check the price only.
+    const step: ThoughtStep = {
       step: "Verified merchant price via Playwright",
       status: "running",
       detail: `Navigating to ${service} pricing page...`,
     };
-    yield { type: "step", step: step2 };
-    await delay(150);
-
+    yield { type: "step", step };
     const priceVerification = await executeVerifyWebPrice({
       service_name: service,
       expected_price: ceiling,
     });
-    defaultPrice = priceVerification.verifiedPrice;
+    step.status = "done";
+    step.detail = `Price: $${priceVerification.verifiedPrice.toFixed(2)}/mo (${priceVerification.planName})`;
+    yield { type: "step", step };
 
-    step2.status = "done";
-    step2.detail = `Scraped live pricing: $${defaultPrice.toFixed(2)}/mo (${priceVerification.planName})`;
-    yield { type: "step", step: step2 };
-
-    // Step 2.5: Pre-Payment Persona Savings Probe
-    const savingsProbe = await personaSavingsOptimizer.probePersonaSavings({
-      serviceName: service,
-      currentPrice: defaultPrice,
-    });
-
-    if (savingsProbe.hasDeals && savingsProbe.advisory) {
-      const savingsStep: ThoughtStep = {
-        step: "Persona Savings Intercept",
-        status: "done",
-        detail: savingsProbe.recommendation,
-      };
-      yield { type: "step", step: savingsStep };
-      yield {
-        type: "savings_advisory",
-        advisory: savingsProbe.advisory as unknown as Record<string, unknown>,
-      };
-    }
-
-    // Step 3: Safety Guardrail check
-    const step3: ThoughtStep = {
-      step: "Safety ceiling check",
-      status: "running",
-      detail: `Checking if $${defaultPrice.toFixed(2)} <= $${ceiling.toFixed(2)} budget ceiling...`,
-    };
-    yield { type: "step", step: step3 };
-    await delay(100);
-
-    if (isPriceExceeded) {
-      step3.status = "done";
-      step3.detail = `BLOCKED: $${defaultPrice.toFixed(2)} exceeds $${ceiling.toFixed(2)} ceiling!`;
-      yield { type: "step", step: step3 };
-
-      const errorMsg = `⚠️ Guardrail Blocked: The verified live price for ${service} ($${defaultPrice.toFixed(
-        2
-      )}) exceeds your authorized budget ceiling of $${ceiling.toFixed(
-        2
-      )}. Payment execution halted to protect your balance.`;
-
-      for (const word of errorMsg.split(" ")) {
-        yield { type: "token", text: word + " " };
-        await delay(25);
-      }
-
-      yield { type: "done", text: errorMsg };
-      return;
-    }
-
-    step3.status = "done";
-    step3.detail = `$${defaultPrice.toFixed(2)} <= $${ceiling.toFixed(2)} ceiling -> Approved`;
-    yield { type: "step", step: step3 };
-
-    // Strict Mode check
-    if (isStrictMode) {
-      const strictMsg = `Verified ${service} is $${defaultPrice.toFixed(
-        2
-      )}/mo (within your $${ceiling.toFixed(
-        2
-      )} ceiling). Strict Approval Mode is ENABLED: Awaiting your manual confirmation before charging PayPal.`;
-
-      for (const word of strictMsg.split(" ")) {
-        yield { type: "token", text: word + " " };
-        await delay(25);
-      }
-
-      yield {
-        type: "thought",
-        thought: {
-          summary: "Execution Steps (3) - Strict Approval Pending",
-          steps: [step1, step2, step3],
-        },
-      };
-
-      yield { type: "done", text: strictMsg };
-      return;
-    }
-
-    // Step 4: PayPal MCP Payment Execution via executePayPalPayment
-    const step4: ThoughtStep = {
-      step: "Executing PayPal Sandbox payment",
-      status: "running",
-      detail: `Creating order via PayPal MCP Server: $${defaultPrice.toFixed(2)} USD`,
-    };
-    yield { type: "step", step: step4 };
-    await delay(150);
-
-    const paymentResult = await executePayPalPayment({
-      service_name: service,
-      verified_price: defaultPrice,
-      budget_ceiling: ceiling,
-      recipient_email: "sb-buyer2026@personal.example.com",
-    });
-
-    const { orderId, receipt } = paymentResult;
-
-    await posthogServer.trackPaymentCompleted({
-      orderId,
-      service,
-      amount: defaultPrice,
-      budgetCeiling: ceiling,
-      savingsEnforced: ceiling - defaultPrice,
-      payerEmail: "sb-buyer2026@personal.example.com",
-    });
-
-    step4.status = "done";
-    step4.detail = `Payment captured! Order ID: ${orderId}`;
-    yield { type: "step", step: step4 };
-
-    yield {
-      type: "receipt",
-      receipt,
-    };
-
-    const completionMsg = `Executed payment for ${service}. Verified price is $${defaultPrice.toFixed(
-      2
-    )}, saving you $${(ceiling - defaultPrice).toFixed(
-      2
-    )} below your $${ceiling.toFixed(
-      2
-    )} ceiling. Transaction completed via PayPal Sandbox.`;
-
-    for (const word of completionMsg.split(" ")) {
-      yield { type: "token", text: word + " " };
-      await delay(20);
-    }
-
-    yield {
-      type: "thought",
-      thought: {
-        summary: "Execution Steps (4)",
-        steps: [step1, step2, step3, step4],
-      },
-    };
-
-    yield { type: "done", text: completionMsg };
+    yield* say(
+      `${service} currently costs $${priceVerification.verifiedPrice.toFixed(2)} ${priceVerification.currency}/mo (${priceVerification.planName}). Nothing was created or paid.`
+    );
   }
 }
 

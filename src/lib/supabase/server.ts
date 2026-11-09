@@ -1,8 +1,10 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import { cookies } from "next/headers";
-import { type SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isSupabaseConfigured } from "./client";
 
+/**
+ * A stateless Supabase client for server routes. It must never persist a session: a cookie-backed
+ * client would write the refresh token to sb-* cookies that browser scripts can read.
+ */
 export function getSupabaseServerClient(): SupabaseClient | null {
   if (!isSupabaseConfigured()) return null;
 
@@ -12,27 +14,13 @@ export function getSupabaseServerClient(): SupabaseClient | null {
   if (!url || !anonKey) return null;
 
   try {
-    const cookieStore = cookies();
-
-    return createServerClient(url, anonKey, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value, ...options });
-          } catch {
-            // Can throw in Server Component render, handled in Route Handlers & Middleware
-          }
-        },
-        remove(name: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value: "", ...options, maxAge: 0 });
-          } catch {
-            // Can throw in Server Component render, handled in Route Handlers & Middleware
-          }
-        },
+    return createClient(url, anonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        // As before: confirmation links carry a one-time code, never tokens in the URL.
+        flowType: "pkce",
       },
     });
   } catch (err) {

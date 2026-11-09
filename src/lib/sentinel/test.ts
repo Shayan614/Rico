@@ -1,4 +1,4 @@
-import { db, mandates, transactions, auditLogs } from "@/db";
+import { db, mandates, transactions, auditLogs, users } from "@/db";
 import { eq } from "drizzle-orm";
 import { priceSentinel } from "./price-sentinel";
 import { omnichannelDispatcher } from "./omnichannel";
@@ -6,13 +6,16 @@ import { handleRemoteAction } from "./callback-handler";
 import { OmnichannelAlert } from "./types";
 
 async function runSentinelOmnichannelTests() {
+  process.env.PAYPAL_MODE = "mock"; // The forced spike below needs explicit mock mode.
   console.log("==================================================");
   console.log("🤖 Testing 24/7 Price Sentinel & Omnichannel Bot Team");
   console.log("==================================================");
 
   // Seed / ensure test mandate in SQLite
   const testMandateId = `mandate-test-${Date.now()}`;
+  const testOwnerId = "usr_sentinel_test";
   const initialMandate = {
+    ownerId: testOwnerId,
     id: testMandateId,
     service: "Adobe Creative Cloud",
     budgetCeiling: 40.0,
@@ -26,6 +29,7 @@ async function runSentinelOmnichannelTests() {
     merchantUrl: "https://www.adobe.com/creativecloud/plans.html",
   };
 
+  db.insert(users).values({ id: testOwnerId, email: "sentinel-test@example.test" }).onConflictDoNothing().run();
   db.insert(mandates).values(initialMandate).run();
   console.log("✅ Seeded test mandate in SQLite:", initialMandate.service, "Ceiling: $40.00, Baseline: $35.00");
 
@@ -79,7 +83,7 @@ async function runSentinelOmnichannelTests() {
     mandateId: testMandateId,
     service: "Adobe Creative Cloud",
     oldPrice: 35.0,
-    newPrice: 54.99,
+    newPrice: 39.99,
     jumpPercent: 57,
     budgetCeiling: 40.0,
     currency: "USD",
@@ -102,10 +106,10 @@ async function runSentinelOmnichannelTests() {
   // 3. Test Remote Action Callback: Approve One-Time (Primary PayPal Capture)
   console.log("\n[Test 3] Testing Remote Webhook Callback: 'approve' (Primary PayPal Wallet)...");
   const approveResult = await handleRemoteAction({
+    ownerId: testOwnerId,
     action: "approve",
     mandateId: testMandateId,
     alertId: sampleAlert.id,
-    overridePrice: 54.99,
   });
 
   console.log("   Approve Action Result:", {
@@ -126,18 +130,38 @@ async function runSentinelOmnichannelTests() {
     .where(eq(transactions.orderId, approveResult.orderId))
     .get();
 
-  if (!tx || tx.amount !== 54.99) {
+  if (!tx || tx.amount !== 39.99) {
     throw new Error("Transaction record missing or incorrect in SQLite transactions table!");
   }
   console.log("✅ PayPal Order captured and recorded in SQLite transactions table:", tx.id);
 
   // 4. Test Remote Action Callback: Pay with Backup Card (Visa via PayPal Vault)
   console.log("\n[Test 4] Testing Remote Webhook Callback: 'backup_card' (Visa Vault)...");
-  const backupCardResult = await handleRemoteAction({
+  const replay = await handleRemoteAction({
+    ownerId: testOwnerId,
     action: "backup_card",
     mandateId: testMandateId,
     alertId: sampleAlert.id,
-    overridePrice: 54.99,
+  });
+  if (replay.success || replay.orderId) {
+    throw new Error("A second button tap on one alert must not charge again!");
+  }
+  console.log("✅ Second tap on the same alert was refused.");
+
+  const backupMandateId = `${testMandateId}-backup`;
+  db.insert(mandates).values({ ...initialMandate, id: backupMandateId }).run();
+  const backupAlert: OmnichannelAlert = {
+    ...sampleAlert,
+    status: "PENDING",
+    id: `${sampleAlert.id}-backup`,
+    mandateId: backupMandateId,
+  };
+  await omnichannelDispatcher.dispatchAlert(backupAlert);
+  const backupCardResult = await handleRemoteAction({
+    ownerId: testOwnerId,
+    action: "backup_card",
+    mandateId: backupMandateId,
+    alertId: backupAlert.id,
   });
 
   console.log("   Backup Card Result:", {
@@ -155,6 +179,7 @@ async function runSentinelOmnichannelTests() {
   // 5. Test Remote Action Callback: Cancel Subscription (Pause Mandate)
   console.log("\n[Test 5] Testing Remote Webhook Callback: 'cancel' (Subscription Pause)...");
   const cancelResult = await handleRemoteAction({
+    ownerId: testOwnerId,
     action: "cancel",
     mandateId: testMandateId,
     alertId: sampleAlert.id,

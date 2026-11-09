@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireSession } from "@/lib/auth/require-session";
 import { personaSavingsOptimizer } from "@/lib/savings";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireSession(req);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await req.json();
     const {
       serviceName,
-      originalPrice,
       discountedPrice,
-      budgetCeiling,
       mandateId,
       dealId,
       fundingRail,
@@ -25,12 +27,11 @@ export async function POST(req: NextRequest) {
 
     const result = await personaSavingsOptimizer.applySavingsPayment({
       serviceName,
-      originalPrice: typeof originalPrice === "number" ? originalPrice : discountedPrice,
       discountedPrice,
-      budgetCeiling: typeof budgetCeiling === "number" ? budgetCeiling : discountedPrice,
       mandateId,
       dealId,
       fundingRail: fundingRail || "PAYPAL",
+      ownerId: auth.session.user.id,
     });
 
     return NextResponse.json({

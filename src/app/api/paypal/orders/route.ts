@@ -1,12 +1,27 @@
 import { NextResponse } from "next/server";
-import { payPalOrders, payPalMCP } from "@/lib/paypal";
+import { requireSession } from "@/lib/auth/require-session";
+import { payPalOAuth, payPalOrders, payPalMCP } from "@/lib/paypal";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const auth = await requireSession(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await request.json();
     const { action, ...params } = body;
+
+    // This route has no reservation or mandate checks, so it must never move real money.
+    if (
+      payPalOAuth.getMode() === "real" &&
+      (action === "capture" || (action === "mcp_tool" && params.toolName === "paypal_orders_capture"))
+    ) {
+      return NextResponse.json(
+        { error: "Direct capture is disabled in real PayPal mode." },
+        { status: 403 }
+      );
+    }
 
     // Action 1: Create Order
     if (action === "create" || !action) {

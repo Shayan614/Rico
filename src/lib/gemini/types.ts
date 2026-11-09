@@ -44,9 +44,12 @@ export interface StreamEvent {
     | "tool_call"
     | "receipt"
     | "savings_advisory"
+    | "payment_confirmation"
     | "done"
     | "error";
   text?: string;
+  /** A server-signed payment quote the user must explicitly confirm. Nothing has been charged. */
+  quote?: Record<string, unknown>;
   step?: ThoughtStep;
   thought?: ThoughtProcess;
   toolCall?: {
@@ -59,6 +62,8 @@ export interface StreamEvent {
 }
 
 export interface ChatContext {
+  /** The verified session user. Tools act only for this user. */
+  ownerId?: string;
   strictMode?: boolean;
   activeMandates?: Array<{
     id: string;

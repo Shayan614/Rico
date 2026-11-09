@@ -1,12 +1,23 @@
-import { db, mandates, transactions, auditLogs } from "./index";
+import { db, dbProvider, mandates, transactions, auditLogs, users } from "./index";
+
+// The shared 1-click demo account, which is mock-only.
+const DEMO_OWNER_ID = "usr_judge_paypal_hackathon";
 
 export async function seedDatabase() {
+  if (dbProvider !== "sqlite") {
+    throw new Error("db:seed deletes all rows and only runs on SQLite");
+  }
   console.log("🌱 Starting SQLite database seed...");
 
   // Clear existing records to ensure clean state
   db.delete(auditLogs).run();
   db.delete(transactions).run();
   db.delete(mandates).run();
+
+  db.insert(users)
+    .values({ id: DEMO_OWNER_ID, email: "judge@paypal-hackathon.ai", fullName: "Judge Evaluator", role: "judge" })
+    .onConflictDoNothing()
+    .run();
 
   // 1. Seed Mandates
   const mockMandates = [
@@ -52,7 +63,7 @@ export async function seedDatabase() {
   ];
 
   for (const mandate of mockMandates) {
-    db.insert(mandates).values(mandate).run();
+    db.insert(mandates).values({ ...mandate, ownerId: DEMO_OWNER_ID }).run();
   }
   console.log(`✅ Seeded ${mockMandates.length} mandates.`);
 

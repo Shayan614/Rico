@@ -1,6 +1,8 @@
-import { db, auditLogs, transactions, mandates } from "@/db";
-import { eq } from "drizzle-orm";
+import { db, auditLogs, mandates } from "@/db";
+import { and, eq } from "drizzle-orm";
 import { executeMandatePayment, type PayPalReceipt } from "@/lib/paypal";
+import { executeAtomicPaymentTransaction } from "@/lib/safety/atomic-transaction";
+import { mandatePeriodKey } from "@/lib/safety/billing-period";
 import { posthogServer } from "@/lib/telemetry/posthog-server";
 import { PERSONA_DEALS_MATRIX } from "./deal-matrix";
 import {
@@ -165,16 +167,17 @@ export class PersonaSavingsOptimizer {
   }
 
   /**
-   * Executes PayPal capture for the discounted amount and saves savings audit record
+   * Executes PayPal capture for the discounted amount and saves savings audit record.
+   * The amount, deal and ceiling all come from server data; the client's price is only compared.
    */
   public async applySavingsPayment(params: {
     serviceName: string;
-    originalPrice: number;
     discountedPrice: number;
-    budgetCeiling: number;
     mandateId?: string;
     dealId?: string;
     fundingRail?: "PAYPAL" | "VISA" | "MASTERCARD" | "AUTO";
+    /** The verified user paying. Never taken from the request body. */
+    ownerId: string;
   }): Promise<{
     success: boolean;
     orderId: string;
@@ -183,80 +186,93 @@ export class PersonaSavingsOptimizer {
     dollarsSaved: number;
     message: string;
   }> {
-    const {
-      serviceName,
-      originalPrice,
-      discountedPrice,
-      budgetCeiling,
-      mandateId,
-      fundingRail,
-      dealId,
-    } = params;
+    const { serviceName, mandateId, fundingRail, dealId, ownerId } = params;
 
-    const matchedDeal = PERSONA_DEALS_MATRIX.find((d) => d.id === dealId);
-    const dollarsSaved = Number(Math.max(0, originalPrice - discountedPrice).toFixed(2));
+    const candidates = mandateId
+      ? await db.select().from(mandates).where(and(eq(mandates.id, mandateId), eq(mandates.ownerId, ownerId))).limit(1)
+      : (await db.select().from(mandates).where(and(eq(mandates.status, "ACTIVE"), eq(mandates.ownerId, ownerId)))).filter(
+          (m) => m.service.toLowerCase() === serviceName.toLowerCase()
+        );
+    if (candidates.length !== 1) {
+      throw new Error(`GUARDRAIL BLOCKED: Could not identify one mandate for ${serviceName}.`);
+    }
+    const mandate = candidates[0];
 
-    // 1. Authorize & Capture discounted payment via PayPal Orders v2
-    const paymentResult = await executeMandatePayment({
-      serviceName,
-      verifiedPrice: discountedPrice,
-      budgetCeiling: Math.max(discountedPrice, budgetCeiling),
-      mandateId,
-      fundingRail: fundingRail || "PAYPAL",
-    });
-
-    const txId = generateId("tx");
-    const receiptData = {
-      ...paymentResult.receipt,
-      savingsEnforced: dollarsSaved,
-      claimedCredits: matchedDeal?.reclaimedCreditValue || 0,
-    };
-
-    // 2. Persist to SQLite transactions table
-    await db.insert(transactions).values({
-      id: txId,
-      mandateId: mandateId || null,
-      orderId: paymentResult.orderId,
-      service: serviceName,
-      amount: discountedPrice,
-      currency: "USD",
-      status: "COMPLETED",
-      receiptData,
-    });
-
-    // 3. Update mandate if mandateId provided
-    if (mandateId) {
-      await db
-        .update(mandates)
-        .set({
-          lastScrapedPrice: discountedPrice,
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(mandates.id, mandateId));
+    const matchedDeal = dealId
+      ? PERSONA_DEALS_MATRIX.find((d) => d.id === dealId)
+      : [...this.findDeals(mandate.service)].sort(
+          (a, b) => b.reclaimedCreditValue - a.reclaimedCreditValue
+        )[0];
+    const term = mandate.service.toLowerCase();
+    if (!matchedDeal || !term.includes(matchedDeal.serviceKey)) {
+      throw new Error(`GUARDRAIL BLOCKED: No valid savings deal applies to ${mandate.service}.`);
     }
 
-    // 4. Record audit log
-    await db.insert(auditLogs).values({
-      id: generateId("log"),
-      mandateId,
-      eventType: "PAYMENT_CAPTURED",
-      service: serviceName,
-      details: `Savings Applied: Paid discounted total of $${discountedPrice.toFixed(
+    const originalPrice =
+      mandate.lastScrapedPrice > 0 ? mandate.lastScrapedPrice : matchedDeal.regularPrice;
+    const discountedPrice = Math.min(originalPrice, matchedDeal.discountedPrice);
+    if (discountedPrice <= 0) {
+      throw new Error(`GUARDRAIL BLOCKED: ${matchedDeal.headline} requires no payment.`);
+    }
+    if (Math.abs(discountedPrice - params.discountedPrice) >= 0.005) {
+      throw new Error(
+        `GUARDRAIL BLOCKED: Requested $${params.discountedPrice.toFixed(2)} does not match server price $${discountedPrice.toFixed(2)}.`
+      );
+    }
+
+    const budgetCeiling = mandate.budgetCeiling;
+    const dollarsSaved = Number(Math.max(0, originalPrice - discountedPrice).toFixed(2));
+    // Shares the mandate's billing-period key with every other payment path, so applying a deal
+    // can never add a second charge for the same period.
+    const idempotencyKey = mandatePeriodKey(mandate);
+
+    // 1. Reserve, capture and record through the guarded payment path
+    const atomicResult = await executeAtomicPaymentTransaction({
+      mandateId: mandate.id,
+      ownerId,
+      orderId: `ORD-${Date.now()}`,
+      idempotencyKey,
+      serviceName: mandate.service,
+      amount: discountedPrice,
+      budgetCeiling,
+      allowedMandateStatuses: ["ACTIVE"],
+      auditDetails: `Savings Applied: Paid discounted total of $${discountedPrice.toFixed(
         2
-      )} (Saved $${dollarsSaved.toFixed(2)} via ${matchedDeal?.headline || "Persona Deal"}).`,
-      severity: "success",
-      metadata: {
-        orderId: paymentResult.orderId,
-        discountedPrice,
-        originalPrice,
-        dollarsSaved,
-        dealId,
+      )} (Saved $${dollarsSaved.toFixed(2)} via ${matchedDeal.headline}).`,
+      auditMetadata: { discountedPrice, originalPrice, dollarsSaved, dealId: matchedDeal.id },
+      executePaymentFn: async () => {
+        const payment = await executeMandatePayment({
+          serviceName: mandate.service,
+          verifiedPrice: discountedPrice,
+          budgetCeiling,
+          mandateId: mandate.id,
+          fundingRail: fundingRail || "PAYPAL",
+          paymentAttemptKey: idempotencyKey,
+        });
+        return {
+          ...payment,
+          receipt: {
+            ...payment.receipt,
+            savingsEnforced: dollarsSaved,
+            claimedCredits: matchedDeal.reclaimedCreditValue,
+          },
+        };
       },
     });
 
+    if (!atomicResult.success) {
+      throw new Error(atomicResult.message);
+    }
+
+    const paymentResult = {
+      orderId: atomicResult.orderId,
+      captureId: atomicResult.captureId || "",
+      receipt: atomicResult.receiptData as unknown as PayPalReceipt,
+    };
+
     // 5. Telemetry
     await posthogServer.trackPaymentCompleted({
-      service: serviceName,
+      service: mandate.service,
       amount: discountedPrice,
       orderId: paymentResult.orderId,
       budgetCeiling,

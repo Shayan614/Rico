@@ -85,8 +85,8 @@ Inspect the live canonical system design on our [Miro Architecture Board](https:
 - **Persistent Sessions:** Tokens are stored in SQLite; users never re-enter card information across sessions.
 
 ### 3. 📱 24/7 Price Sentinel & Omnichannel Bot Team
-- **Background Cron Daemon:** Audits all active mandates nightly against merchant baselines.
-- **Interactive Messaging:** Instant alerts dispatched to **Telegram, WhatsApp, and Slack**.
+- **Scheduled Audits:** `POST /api/cron/sentinel` audits all active mandates when an external daily scheduler calls it (see *Scheduled Monitoring* below). Audits never make payments.
+- **Interactive Messaging:** Telegram alerts when a bot is configured. WhatsApp and Slack message formats exist, but nothing is sent yet.
 - **1-Tap Action Callbacks:** Remote `[Approve One-Time]`, `[Pay with Backup Card]`, or `[1-Click Cancel Subscription]` buttons executed right from the chat notification.
 
 ### 4. 🚀 Persona-Based Savings & Credit Optimizer ("AI That Pays for Itself")
@@ -136,6 +136,23 @@ NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
 npm run dev
 ```
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### 4. Scheduled Monitoring (Optional)
+Rico does not start a scheduler by itself. To run daily audits, set `CRON_SECRET` on the server to a random value of at least 32 characters (for example `openssl rand -hex 32`), then have an external scheduler send one request a day:
+```bash
+curl -X POST "https://YOUR-RICO-HOST/api/cron/sentinel" \
+  -H "Authorization: Bearer $CRON_SECRET" --max-time 300
+```
+Any scheduler that can send this request works, such as a Render Cron Job or a GitHub Actions `schedule` workflow with the secret stored in its secrets. The server needs Playwright's Chromium, because only live prices are trusted.
+
+| Response | Meaning |
+| --- | --- |
+| `200` | Audit finished; the body has counts only |
+| `401` | Missing or wrong secret |
+| `409` | Another audit is already running; do not retry straight away |
+| `503` | `CRON_SECRET` is missing or shorter than 32 characters |
+
+The Sentinel panel shows *Scheduled* only after a successful run in the last 26 hours.
 
 ---
 

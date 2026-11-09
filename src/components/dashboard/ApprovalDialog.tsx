@@ -23,6 +23,10 @@ export interface ApprovalRequest {
   fundingRail?: "PAYPAL" | "VISA" | "MASTERCARD";
   anomalyType?: "PRICE_SPIKE" | "STRICT_MODE" | "BUDGET_CEILING_EXCEEDED";
   riskLevel?: "warning" | "danger" | "critical";
+  /** Server-signed confirmation for a quoted payment. Only this lets the server charge. */
+  confirmToken?: string;
+  mandateId?: string;
+  periodLabel?: string;
 }
 
 interface ApprovalDialogProps {
@@ -45,10 +49,12 @@ export function ApprovalDialog({
       <DialogContent className="sm:max-w-md bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-900 dark:text-neutral-100">
         <DialogHeader>
           <DialogTitle className="text-base font-bold text-neutral-900 dark:text-neutral-100">
-            Manual Approval Required
+            {request.confirmToken ? "Confirm Payment" : "Manual Approval Required"}
           </DialogTitle>
           <DialogDescription className="text-xs text-neutral-500">
-            Safety guardrail paused execution for review
+            {request.confirmToken
+              ? "Review the details below. Nothing is charged until you approve."
+              : "Safety guardrail paused execution for review"}
           </DialogDescription>
         </DialogHeader>
 
@@ -75,6 +81,12 @@ export function ApprovalDialog({
                 ${request.budgetCeiling.toFixed(2)} {request.currency}
               </span>
             </div>
+            {request.periodLabel && (
+              <div className="flex justify-between items-center text-neutral-500">
+                <span>Billing Period</span>
+                <span className="text-neutral-700 dark:text-neutral-300">{request.periodLabel}</span>
+              </div>
+            )}
           </div>
         </div>
 

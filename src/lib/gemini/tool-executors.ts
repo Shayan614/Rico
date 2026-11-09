@@ -1,8 +1,8 @@
 import { db, mandates, auditLogs, type MandateRecord } from "@/db";
-import { executeMandatePayment, type PayPalReceipt } from "@/lib/paypal";
 import { priceWorker } from "@/lib/browser";
 import { personaSavingsOptimizer } from "@/lib/savings";
-import { executeAtomicPaymentTransaction } from "@/lib/safety";
+import { getOwnedMandate } from "@/lib/safety/mandate-access";
+import { quoteMandatePayment, type PaymentQuote } from "@/lib/payments/mandate-execution";
 import {
   MandateToolParams,
   VerifyPriceToolParams,
@@ -17,7 +17,7 @@ function generateId(prefix: string): string {
  * Tool 1: create_mandate
  * Registers a new autonomous recurring financial mandate with a hard budget ceiling
  */
-export async function executeCreateMandate(params: MandateToolParams): Promise<{
+export async function executeCreateMandate(params: MandateToolParams, ownerId: string): Promise<{
   success: boolean;
   mandate: MandateRecord;
   message: string;
@@ -42,6 +42,7 @@ export async function executeCreateMandate(params: MandateToolParams): Promise<{
     .insert(mandates)
     .values({
       id: mandateId,
+      ownerId,
       service: params.service,
       budgetCeiling: params.max_amount,
       lastScrapedPrice: 0,
@@ -160,50 +161,25 @@ export async function executeVerifyWebPrice(params: VerifyPriceToolParams): Prom
  * Tool 3: execute_paypal_payment
  * Executes live PayPal payment via Sandbox MCP Server / Orders API with hard guardrails
  */
-export async function executePayPalPayment(params: ExecutePaymentToolParams): Promise<{
+export async function executePayPalPayment(params: ExecutePaymentToolParams, ownerId: string): Promise<{
   success: boolean;
-  orderId: string;
-  captureId: string;
-  receipt: PayPalReceipt;
+  requiresConfirmation: true;
+  quote: PaymentQuote;
   message: string;
 }> {
-  const tempOrderId = `ORD-${Date.now()}`;
-
-  // Execute payment wrapped in the Atomic Transaction Wrapper & Double-Billing Guard
-  const atomicResult = await executeAtomicPaymentTransaction({
-    mandateId: params.mandate_id,
-    orderId: tempOrderId,
-    serviceName: params.service_name,
-    amount: params.verified_price,
-    budgetCeiling: params.budget_ceiling,
-    currency: "USD",
-    executePaymentFn: async () => {
-      const res = await executeMandatePayment({
-        serviceName: params.service_name,
-        verifiedPrice: params.verified_price,
-        budgetCeiling: params.budget_ceiling,
-        currency: "USD",
-        mandateId: params.mandate_id,
-        fundingRail: params.funding_rail || "AUTO",
-      });
-      return res;
-    },
-  });
-
-  if (!atomicResult.success) {
-    throw new Error(atomicResult.message);
+  // The agent can never charge. It can only prepare a quote for one of this user's own mandates;
+  // the user must then confirm it explicitly (POST /api/payments/execute with the signed token).
+  // The model's price and ceiling are ignored: the quote uses server data only.
+  const result = await quoteMandatePayment(params.mandate_id ?? "", ownerId);
+  if (!result.ok) {
+    throw new Error(`No payment was made: ${result.message}`);
   }
-
-  const receipt = (atomicResult.receiptData as unknown as PayPalReceipt) || null;
-  const orderId = atomicResult.orderId;
-  const captureId = receipt?.captureId || receipt?.sandboxAuthCode || "";
-
+  const q = result.quote;
   return {
     success: true,
-    orderId,
-    captureId,
-    receipt,
-    message: atomicResult.message,
+    requiresConfirmation: true,
+    quote: q,
+    message: `Awaiting your confirmation: ${q.service} $${q.amount.toFixed(2)} ${q.currency} (ceiling $${q.budgetCeiling.toFixed(2)}, billing period ${q.periodLabel}). No payment has been made.`,
   };
 }
 
@@ -244,12 +220,19 @@ export async function executeCompareMultiServicePrices(params: {
  */
 export async function dispatchAgentTool(
   toolName: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  ownerId: string
 ): Promise<Record<string, unknown>> {
+  // Model arguments can name any mandate, so each one is checked against the verified user.
+  const mandateArg = args.mandate_id ? String(args.mandate_id) : undefined;
+  const ownedMandateId =
+    mandateArg && (await getOwnedMandate(mandateArg, ownerId)) ? mandateArg : undefined;
+
   switch (toolName) {
     case "create_mandate":
       return (await executeCreateMandate(
-        args as unknown as MandateToolParams
+        args as unknown as MandateToolParams,
+        ownerId
       )) as unknown as Record<string, unknown>;
 
     case "verify_web_price":
@@ -267,12 +250,13 @@ export async function dispatchAgentTool(
         serviceName: String(args.service_name || ""),
         currentPrice: Number(args.current_price || 0),
         persona: (args.persona as "STARTUP_FOUNDER" | "STUDENT" | "DEVELOPER_SMB") || undefined,
-        mandateId: args.mandate_id ? String(args.mandate_id) : undefined,
+        mandateId: ownedMandateId,
       })) as unknown as Record<string, unknown>;
 
     case "execute_paypal_payment":
       return (await executePayPalPayment(
-        args as unknown as ExecutePaymentToolParams
+        args as unknown as ExecutePaymentToolParams,
+        ownerId
       )) as unknown as Record<string, unknown>;
 
     default:

@@ -8,10 +8,14 @@ import {
   executePayPalPayment,
   dispatchAgentTool,
 } from "./index";
+import { db, users } from "@/db";
 import { priceWorker } from "@/lib/browser";
 import type { PayPalReceipt } from "@/lib/paypal";
 
+const TEST_OWNER_ID = "usr_gemini_test";
+
 async function runGeminiIntegrationTest() {
+  db.insert(users).values({ id: TEST_OWNER_ID, email: "gemini-test@example.test" }).onConflictDoNothing().run();
   console.log("==================================================");
   console.log("🤖 Testing Gemini 3.8 Flash & Agent Function Tools");
   console.log("==================================================");
@@ -91,7 +95,7 @@ async function runGeminiIntegrationTest() {
     schedule: "Monthly on 12th",
     category: "Entertainment",
     strict_mode: false,
-  });
+  }, TEST_OWNER_ID);
   console.log("✅ Mandate created & persisted in SQLite:", {
     id: mandateResult.mandate.id,
     service: mandateResult.mandate.service,
@@ -129,18 +133,26 @@ async function runGeminiIntegrationTest() {
 
   // 6. Test Tool 3: executePayPalPayment (Guardrail & Capture)
   console.log("\n[Test 6] Testing Tool 3: execute_paypal_payment()...");
+  const spotifyMandate = await executeCreateMandate({
+    service: "Spotify",
+    max_amount: 15.0,
+    schedule: "Monthly on 1st",
+  }, TEST_OWNER_ID);
   const paymentRes = await executePayPalPayment({
-    service_name: "Spotify Premium",
-    verified_price: 11.99,
+    service_name: "Spotify",
+    verified_price: normalPrice.verifiedPrice,
     budget_ceiling: 15.0,
     recipient_email: "billing@spotify.com",
-    mandate_id: mandateResult.mandate.id,
-  });
-  console.log("✅ Payment authorized, captured & stored in SQLite:", {
-    orderId: paymentRes.orderId,
-    captureId: paymentRes.captureId,
-    status: paymentRes.receipt.status,
-    authCode: paymentRes.receipt.sandboxAuthCode,
+    mandate_id: spotifyMandate.mandate.id,
+  }, TEST_OWNER_ID);
+  // The agent tool never charges: it only prepares a quote the user must confirm.
+  if (!paymentRes.requiresConfirmation || !paymentRes.quote.confirmToken) {
+    throw new Error("execute_paypal_payment must only return a quote for confirmation!");
+  }
+  console.log("✅ Payment quoted for confirmation (nothing charged):", {
+    service: paymentRes.quote.service,
+    amount: paymentRes.quote.amount,
+    billingPeriod: paymentRes.quote.periodLabel,
   });
 
   // 7. Test Tool 3 Guardrail Interception
@@ -150,7 +162,7 @@ async function runGeminiIntegrationTest() {
       service_name: "Adobe Creative Cloud",
       verified_price: 59.99,
       budget_ceiling: 30.0,
-    });
+    }, TEST_OWNER_ID);
     throw new Error("Guardrail failed to intercept payment!");
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -161,7 +173,7 @@ async function runGeminiIntegrationTest() {
   console.log("\n[Test 8] Testing Universal Tool Dispatcher (dispatchAgentTool)...");
   const dispatched = await dispatchAgentTool("verify_web_price", {
     service_name: "Netflix",
-  });
+  }, TEST_OWNER_ID);
   console.log("✅ Dispatcher routed 'verify_web_price':", {
     service: dispatched.service,
     verifiedPrice: dispatched.verifiedPrice,
@@ -174,7 +186,7 @@ async function runGeminiIntegrationTest() {
   const stepsCaptured: string[] = [];
   let receiptCaptured: PayPalReceipt | Record<string, unknown> | null = null;
 
-  const stream = geminiAgent.streamResponse(userPrompt, { strictMode: false });
+  const stream = geminiAgent.streamResponse(userPrompt, { strictMode: false, ownerId: TEST_OWNER_ID });
 
   for await (const event of stream) {
     if (event.type === "step" && event.step) {
@@ -191,14 +203,11 @@ async function runGeminiIntegrationTest() {
   console.log(
     `✅ Stream completed! Generated ${tokenCount} tokens and executed ${stepsCaptured.length} steps.`
   );
+  // A rule-creation message must create the rule and never pay.
   if (receiptCaptured) {
-    const rec = receiptCaptured as Record<string, unknown>;
-    console.log("✅ Autonomous Receipt generated:", {
-      orderId: rec.orderId,
-      service: rec.service,
-      status: rec.status,
-    });
+    throw new Error("A chat message produced a payment receipt without confirmation!");
   }
+  console.log("✅ Rule-creation message created a rule and made no payment.");
 
   console.log("\n==================================================");
   console.log("🎉 All 9 Gemini Agent & Function Calling Tests PASSED!");

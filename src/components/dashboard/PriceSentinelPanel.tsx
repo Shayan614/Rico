@@ -24,7 +24,9 @@ interface PriceSentinelPanelProps {
 }
 
 interface SentinelStats {
-  schedulerActive: boolean;
+  monitoringMode: "scheduled" | "awaiting_run" | "manual_only";
+  lastScheduledRunAt: string | null;
+  telegramMode: string;
   intervalMinutes: number;
   totalAuditsRun: number;
   anomaliesDetected: number;
@@ -38,14 +40,22 @@ export function PriceSentinelPanel({
   onRefreshData,
 }: PriceSentinelPanelProps) {
   const [stats, setStats] = useState<SentinelStats>({
-    schedulerActive: true,
+    monitoringMode: "manual_only",
+    lastScheduledRunAt: null,
+    telegramMode: "SIMULATED_MOCK",
     intervalMinutes: 1440,
-    totalAuditsRun: 12,
-    anomaliesDetected: 1,
-    savingsIdentified: 14.5,
-    lastRunAt: "Today, 03:00 AM",
-    pendingAlertsCount: 1,
+    totalAuditsRun: 0,
+    anomaliesDetected: 0,
+    savingsIdentified: 0,
+    lastRunAt: "Not run yet",
+    pendingAlertsCount: 0,
   });
+
+  const monitoringLabel = {
+    scheduled: { badge: "SCHEDULED", status: "Scheduled (daily)" },
+    awaiting_run: { badge: "NO RECENT SCHEDULED RUN", status: "Configured, no recent run" },
+    manual_only: { badge: "MANUAL ONLY", status: "Manual only" },
+  }[stats.monitoringMode];
 
   const [activeChannel, setActiveChannel] = useState<"telegram" | "whatsapp" | "slack">("telegram");
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -95,7 +105,9 @@ export function PriceSentinelPanel({
         if (data.sentinel) {
           setStats((prev) => ({
             ...prev,
-            schedulerActive: data.sentinel.schedulerActive ?? true,
+            monitoringMode: data.sentinel.monitoring?.mode ?? "manual_only",
+            lastScheduledRunAt: data.sentinel.monitoring?.lastScheduledRunAt ?? null,
+            telegramMode: data.sentinel.channels?.telegram?.mode ?? "SIMULATED_MOCK",
             totalAuditsRun: data.sentinel.totalAuditsRun || prev.totalAuditsRun,
             anomaliesDetected: data.sentinel.anomaliesDetected || prev.anomaliesDetected,
             savingsIdentified: data.sentinel.savingsIdentified || prev.savingsIdentified,
@@ -182,7 +194,6 @@ export function PriceSentinelPanel({
           ...prev,
           totalAuditsRun: prev.totalAuditsRun + data.summary.totalAudited,
           anomaliesDetected: prev.anomaliesDetected + data.summary.anomaliesDetected,
-          savingsIdentified: prev.savingsIdentified + data.summary.savingsCount * 5,
           lastRunAt: "Just now",
         }));
         if (forceSpike) {
@@ -195,6 +206,9 @@ export function PriceSentinelPanel({
         }
         setActionSuccessMsg(data.message);
         if (onRefreshData) onRefreshData();
+        fetchSentinelStatus();
+      } else {
+        setActionSuccessMsg(`Audit failed: ${data.error || "Please try again."}`);
       }
     } catch (err) {
       setActionSuccessMsg(`Audit failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -212,17 +226,17 @@ export function PriceSentinelPanel({
             <span className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-ping" />
             <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
               <Bot className="w-4 h-4 text-sky-400" />
-              Rico — 24/7 Price Sentinel & Omnichannel Bot Team
+              Rico — Price Sentinel & Omnichannel Bot Team
             </h2>
             <Badge
               variant="outline"
               className="text-[10px] py-0 px-1.5 border-sky-400/40 text-sky-300 bg-sky-500/10 font-mono"
             >
-              24/7 DAEMON ACTIVE
+              {monitoringLabel.badge}
             </Badge>
           </div>
           <p className="text-xs text-sky-200/80 mt-1">
-            Autonomous 24-Hour Background Price Auditing + Instant Interactive Alerts on WhatsApp, Telegram & Slack
+            Price audits on demand or from an external daily scheduler, with Telegram alerts when a bot is connected
           </p>
         </div>
 
@@ -234,7 +248,7 @@ export function PriceSentinelPanel({
             className="px-3 py-1.5 text-xs font-medium rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-colors flex items-center gap-1.5 shadow-xs disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${runningAudit ? "animate-spin" : ""}`} />
-            <span>Run 24h Audit Now</span>
+            <span>Run Audit Now</span>
           </button>
 
           <button
@@ -242,7 +256,7 @@ export function PriceSentinelPanel({
             disabled={runningAudit}
             onClick={() => handleTriggerAudit(true)}
             className="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 hover:bg-amber-500 text-white transition-colors flex items-center gap-1.5 shadow-xs disabled:opacity-50"
-            title="Simulate the canonical Miro board scenario: Adobe Creative Cloud +57% price spike"
+            title="Mock mode only: simulates an Adobe Creative Cloud +57% price spike"
           >
             <Zap className="w-3.5 h-3.5" />
             <span>Simulate Spike (+57%)</span>
@@ -259,9 +273,13 @@ export function PriceSentinelPanel({
           </div>
           <div className="text-sm font-bold text-sky-400 flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
-            Active (24h Cron)
+            {monitoringLabel.status}
           </div>
-          <span className="text-[10px] text-neutral-500">Autonomous loop</span>
+          <span className="text-[10px] text-neutral-500">
+            {stats.lastScheduledRunAt
+              ? `Last scheduled run: ${new Date(stats.lastScheduledRunAt).toLocaleString()}`
+              : "No scheduled run recorded"}
+          </span>
         </div>
 
         <div className="p-2.5 rounded-lg border border-neutral-800 bg-neutral-900/60 shadow-xs">
@@ -367,7 +385,9 @@ export function PriceSentinelPanel({
                       Rico Sentinel
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     </div>
-                    <div className="text-[10px] text-[#00c0ff]">Telegram Bot • 24/7 Active</div>
+                    <div className="text-[10px] text-[#00c0ff]">
+                      Telegram preview • {stats.telegramMode === "LIVE_BOT" ? "Bot connected" : "Simulated, nothing sent"}
+                    </div>
                   </div>
                 </div>
                 <Badge className="bg-sky-500/20 text-sky-300 border-none text-[9px]">Verified</Badge>
@@ -489,6 +509,7 @@ export function PriceSentinelPanel({
                 <MessageSquare className="w-4 h-4" />
                 <span>WhatsApp Cloud Interactive Quick Replies</span>
               </div>
+              <p className="text-[11px] text-amber-300">Planned: only the message format exists. Nothing is sent.</p>
               <ul className="text-xs text-neutral-200 space-y-2 leading-relaxed">
                 <li className="flex items-start gap-1.5">
                   <span className="text-emerald-400 font-bold">•</span>
@@ -523,6 +544,7 @@ export function PriceSentinelPanel({
                 <Bot className="w-4 h-4" />
                 <span>Slack Enterprise Block Kit Integration</span>
               </div>
+              <p className="text-[11px] text-amber-300">Planned: only the message format exists. Nothing is sent.</p>
               <ul className="text-xs text-neutral-200 space-y-2 leading-relaxed">
                 <li className="flex items-start gap-1.5">
                   <span className="text-amber-400 font-bold">•</span>
@@ -554,7 +576,7 @@ export function PriceSentinelPanel({
         <div className="lg:col-span-6 flex flex-col space-y-3">
           <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
             <Zap className="w-3.5 h-3.5 text-amber-400" />
-            2. Autonomous 24-Hour Background Sentinel Architecture
+            2. Sentinel Audit Flow
           </span>
 
           {/* 4 Architecture Steps matching Miro Frame */}
@@ -566,11 +588,11 @@ export function PriceSentinelPanel({
               </div>
               <div>
                 <h4 className="text-xs font-bold text-sky-300">
-                  Background Cron Scheduler (Runs Every 24 Hours)
+                  Scheduled Audit Endpoint (Needs an External Daily Scheduler)
                 </h4>
                 <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">
-                  Nightly daemon queries SQLite for active mandates. Iterates through services
-                  (Netflix, Spotify, Adobe, AWS, Copilot) to schedule headless audits.
+                  A scheduler or the Run Audit button starts an audit of every active spending rule.
+                  Paused and held rules are skipped, and an audit never makes a payment.
                 </p>
               </div>
             </div>
@@ -586,7 +608,8 @@ export function PriceSentinelPanel({
                 </h4>
                 <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">
                   Headless browser worker visits merchant plan page, inspects current plan prices,
-                  and compares against <code>last_scraped_price</code> stored in SQLite memory.
+                  and compares against <code>last_scraped_price</code>. If no live price can be read,
+                  the rule is reported as unverified and left unchanged.
                 </p>
               </div>
             </div>
@@ -601,9 +624,8 @@ export function PriceSentinelPanel({
                   Anomaly &amp; Change Detection Engine
                 </h4>
                 <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">
-                  Flags events: (A) Price Drop (notifies savings), (B) Price Increase &lt; Budget
-                  (informs user), (C) Price Spike &gt; Budget (puts mandate on ANOMALY_HOLD and
-                  triggers alert).
+                  Records price drops and steady prices. A price spike or a price over budget puts the
+                  rule on ANOMALY_HOLD and raises an alert.
                 </p>
               </div>
             </div>
@@ -618,8 +640,8 @@ export function PriceSentinelPanel({
                   Omnichannel Webhook &amp; Interactive Callback
                 </h4>
                 <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">
-                  Dispatches formatted message with inline action buttons to user&apos;s Telegram/WhatsApp.
-                  User button callback executes instant PayPal Capture or cancels subscription.
+                  Sends action buttons to Telegram when a bot is connected. Approving a hold goes through
+                  the guarded payment path; cancelling pauses the rule.
                 </p>
               </div>
             </div>
@@ -632,10 +654,9 @@ export function PriceSentinelPanel({
               🏆 Real-World Industry Impact &amp; Hackathon Value
             </div>
             <p className="text-[11px] text-yellow-100/80 leading-relaxed">
-              • <strong>Continuous 24/7 Protection:</strong> Not just a one-off demo — runs
-              autonomously day and night in the background.<br />
-              • <strong>Zero App Barrier:</strong> WhatsApp and Telegram integrations make Rico
-              accessible to billions of mobile users.<br />
+              • <strong>Scheduled Protection:</strong> Daily audits once an external scheduler is
+              connected.<br />
+              • <strong>Zero App Barrier:</strong> Telegram alerts and buttons, with WhatsApp planned.<br />
               • <strong>Qualifies For:</strong> Best Agentic Commerce ($5,000) and 1st Place Overall
               ($12,000)!
             </p>

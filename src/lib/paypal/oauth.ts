@@ -1,7 +1,11 @@
+import { PayPalConfigError, PayPalPaymentError } from "./errors";
 import { PayPalOAuthToken } from "./types";
 
 const SANDBOX_BASE_URL = "https://api-m.sandbox.paypal.com";
 const LIVE_BASE_URL = "https://api-m.paypal.com";
+const DEFAULT_TIMEOUT_MS = 30000;
+
+export type PayPalMode = "real" | "mock";
 
 class PayPalOAuthManager {
   private cachedToken: PayPalOAuthToken | null = null;
@@ -38,9 +42,48 @@ class PayPalOAuthManager {
   }
 
   /**
+   * Decides between real PayPal calls and the simulator. Runtime failures never change the mode.
+   * Without PAYPAL_MODE, missing credentials mean mock only outside production.
+   */
+  public getMode(): PayPalMode {
+    const explicit = (process.env.PAYPAL_MODE || "").trim().toLowerCase();
+    const hasCredentials = this.isLiveCredentialsConfigured();
+    const isLiveEnvironment = this.getEnvironment() === "live";
+
+    if (explicit === "mock") {
+      if (isLiveEnvironment) {
+        throw new PayPalConfigError("PAYPAL_MODE=mock cannot be used with PAYPAL_ENVIRONMENT=live.");
+      }
+      return "mock";
+    }
+    if (explicit === "real") {
+      if (!hasCredentials) {
+        throw new PayPalConfigError("PAYPAL_MODE=real requires PayPal credentials.");
+      }
+      return "real";
+    }
+    if (explicit) {
+      throw new PayPalConfigError('PAYPAL_MODE must be "real" or "mock".');
+    }
+    if (hasCredentials) return "real";
+    if (isLiveEnvironment || process.env.NODE_ENV === "production") {
+      throw new PayPalConfigError(
+        "PayPal credentials are missing. Configure them, or set PAYPAL_MODE=mock for a demo."
+      );
+    }
+    return "mock";
+  }
+
+  public getTimeoutMs(): number {
+    const configured = Number(process.env.PAYPAL_TIMEOUT_MS);
+    return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_TIMEOUT_MS;
+  }
+
+  /**
    * Retrieves an active OAuth2 Bearer token with automatic refresh
    */
   public async getAccessToken(): Promise<string> {
+    const mode = this.getMode();
     const now = Date.now();
 
     // Check if token is still valid with 60 seconds grace period
@@ -48,46 +91,49 @@ class PayPalOAuthManager {
       return this.cachedToken.access_token;
     }
 
-    // If live credentials are provided, request token from PayPal API
-    if (this.isLiveCredentialsConfigured()) {
-      try {
-        const credentials = Buffer.from(
-          `${this.getClientId()}:${this.getClientSecret()}`
-        ).toString("base64");
+    if (mode === "real") {
+      const credentials = Buffer.from(
+        `${this.getClientId()}:${this.getClientSecret()}`
+      ).toString("base64");
 
-        const response = await fetch(`${this.getBaseUrl()}/v1/oauth2/token`, {
+      let response: Response;
+      let data: Partial<PayPalOAuthToken> | null = null;
+      try {
+        response = await fetch(`${this.getBaseUrl()}/v1/oauth2/token`, {
           method: "POST",
           headers: {
             Authorization: `Basic ${credentials}`,
             "Content-Type": "application/x-www-form-urlencoded",
           },
           body: "grant_type=client_credentials",
+          signal: AbortSignal.timeout(this.getTimeoutMs()),
         });
-
-        if (response.ok) {
-          const data = await response.json();
-          this.cachedToken = {
-            access_token: data.access_token,
-            token_type: data.token_type || "Bearer",
-            app_id: data.app_id || "APP-PAYPAL-SANDBOX",
-            expires_in: data.expires_in || 32400,
-            nonce: data.nonce || `nonce-${Date.now()}`,
-            scope: data.scope || "https://uri.paypal.com/services/payments",
-            expires_at: now + (data.expires_in || 32400) * 1000,
-          };
-          return this.cachedToken.access_token;
-        } else {
-          const errBody = await response.text();
-          console.warn(
-            `PayPal OAuth failed (${response.status}): ${errBody}. Falling back to sandbox simulator.`
-          );
-        }
+        if (response.ok) data = await response.json();
       } catch (err) {
-        console.warn(
-          "PayPal OAuth network unreachable. Falling back to sandbox simulator:",
-          err
+        throw new PayPalPaymentError(
+          `PayPal OAuth request failed: ${err instanceof Error ? err.name : "unknown error"}`,
+          { kind: "UNKNOWN_OUTCOME", operation: "oauth" }
         );
       }
+
+      if (!response.ok || !data?.access_token) {
+        throw new PayPalPaymentError(`PayPal OAuth failed with HTTP ${response.status}`, {
+          kind: "UNKNOWN_OUTCOME",
+          operation: "oauth",
+          httpStatus: response.status,
+        });
+      }
+
+      this.cachedToken = {
+        access_token: data.access_token,
+        token_type: data.token_type || "Bearer",
+        app_id: data.app_id || "APP-PAYPAL-SANDBOX",
+        expires_in: data.expires_in || 32400,
+        nonce: data.nonce || `nonce-${Date.now()}`,
+        scope: data.scope || "https://uri.paypal.com/services/payments",
+        expires_at: now + (data.expires_in || 32400) * 1000,
+      };
+      return this.cachedToken.access_token;
     }
 
     // High-fidelity Sandbox Token Generator

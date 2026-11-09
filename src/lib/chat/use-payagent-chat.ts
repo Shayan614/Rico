@@ -272,6 +272,28 @@ export function usePayAgentChat({
                       : m
                   )
                 );
+              } else if (event.type === "payment_confirmation" && event.quote && onApprovalRequired) {
+                // The server prepared a quote; nothing is charged until the user confirms it.
+                const q = event.quote as {
+                  mandateId: string;
+                  service: string;
+                  amount: number;
+                  currency: string;
+                  budgetCeiling: number;
+                  periodLabel: string;
+                  confirmToken: string;
+                };
+                onApprovalRequired({
+                  id: `confirm-${Date.now()}`,
+                  service: q.service,
+                  detectedPrice: q.amount,
+                  budgetCeiling: q.budgetCeiling,
+                  currency: q.currency,
+                  reason: "Please confirm this payment. Nothing has been charged yet.",
+                  confirmToken: q.confirmToken,
+                  mandateId: q.mandateId,
+                  periodLabel: q.periodLabel,
+                });
               } else if (event.type === "done" && event.text && !accumulatedText) {
                 accumulatedText = event.text;
                 setMessages((prev) =>
@@ -289,32 +311,6 @@ export function usePayAgentChat({
               console.warn("SSE parse error:", pErr);
             }
           }
-        }
-
-        // Check if strict mode approval is required in the response
-        if (
-          strictMode &&
-          accumulatedText.includes("Strict Approval Mode is ENABLED") &&
-          onApprovalRequired
-        ) {
-          const serviceMatch =
-            trimmed.toLowerCase().includes("netflix")
-              ? "Netflix Standard HD"
-              : trimmed.toLowerCase().includes("spotify")
-              ? "Spotify Premium"
-              : trimmed.toLowerCase().includes("aws")
-              ? "AWS Cloud Services"
-              : "Merchant Service";
-
-          onApprovalRequired({
-            id: `req-${Date.now()}`,
-            service: serviceMatch,
-            detectedPrice: 15.49,
-            budgetCeiling: 20.0,
-            reason:
-              "Strict Approval Mode is active. Please confirm before completing PayPal charge.",
-            currency: "USD",
-          });
         }
 
         const completedMsg: ChatMessage = {
